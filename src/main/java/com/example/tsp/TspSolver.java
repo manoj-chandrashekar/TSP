@@ -64,6 +64,9 @@ public class TspSolver extends Application {
         Button btnClear = new Button("Clear all");
         btnClear.setOnAction(e -> clearCanvas(canvas));
 
+        Button btnChristofides = new Button("Christofides");
+        btnChristofides.setOnAction(e -> christofidesAlgorithm(canvas));
+
         Button btnNN = new Button("Nearest neighbor method");
         btnNN.setOnAction(e -> nearestNeighbor(canvas));
 
@@ -93,7 +96,7 @@ public class TspSolver extends Application {
         });
 
 
-        HBox buttons = new HBox(10, btnClear, btnNN, btnOpt2, btnRandom);
+        HBox buttons = new HBox(10, btnClear, btnChristofides, btnNN, btnOpt2, btnRandom);
         buttons.setSpacing(10);
 
         VBox root = new VBox(10, canvas, buttons, solutionCostLabel);
@@ -153,6 +156,7 @@ public class TspSolver extends Application {
                 lastCity.getX(), lastCity.getY());
         lines.add(closingLine);
         canvas.getChildren().add(closingLine);
+        solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost()));
     }
 
 
@@ -279,6 +283,39 @@ public class TspSolver extends Application {
         solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost()));
 
 
+    }
+
+    private void christofidesAlgorithm(Pane canvas) {
+        List<Edge> mst = minimumSpanningTree(cities);
+        List<City> oddVertices = oddDegreeVertices(cities, mst);
+        List<Edge> matching = minimumWeightPerfectMatching(oddVertices);
+        List<Edge> multigraph = combineMSTAndMatching(mst, matching);
+        List<City> eulerianTour = findEulerianCircuit(multigraph);
+        List<City> hamiltonianTour = convertEulerianToHamiltonian(eulerianTour);
+
+        if (hamiltonianTour.size() < 2) {
+            return;
+        }
+        clearLines(canvas);
+        resetLinesColor();
+
+        for (int i = 0; i < hamiltonianTour.size() - 1; i++) {
+            City from = hamiltonianTour.get(i);
+            City to = hamiltonianTour.get(i + 1);
+
+            Line line = new Line(from.getX(), from.getY(), to.getX(), to.getY());
+            lines.add(line);
+            canvas.getChildren().add(line);
+        }
+
+        double cost = 0.0;
+        for (int i = 0; i < hamiltonianTour.size(); i++) {
+            City currentCity = hamiltonianTour.get(i);
+            City nextCity = hamiltonianTour.get((i + 1) % hamiltonianTour.size());
+            cost += currentCity.distanceTo(nextCity);
+        }
+        highlightSolution();
+        solutionCostLabel.setText("Solution cost: " + String.format("%.2f", cost));
     }
 
 
@@ -419,6 +456,35 @@ public class TspSolver extends Application {
     }
 
     private List<Edge> minimumWeightPerfectMatching(List<City> oddDegreeVertices) {
+        List<Edge> matching = new ArrayList<>();
+        List<City> unmatchedVertices = new ArrayList<>(oddDegreeVertices);
+
+        while (!unmatchedVertices.isEmpty()) {
+            double minDistance = Double.MAX_VALUE;
+            Edge minEdge = null;
+            int minIndex = -1;
+
+            for (int i = 0; i < unmatchedVertices.size(); i++) {
+                City city1 = unmatchedVertices.get(i);
+                for (int j = i + 1; j < unmatchedVertices.size(); j++) {
+                    City city2 = unmatchedVertices.get(j);
+                    double distance = city1.distanceTo(city2);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        minEdge = new Edge(city1, city2, distance);
+                        minIndex = j;
+                    }
+                }
+            }
+
+            matching.add(minEdge);
+            unmatchedVertices.remove(minIndex);
+            unmatchedVertices.remove(0);
+        }
+
+        return matching;
+    }
+    /*private List<Edge> minimumWeightPerfectMatching(List<City> oddDegreeVertices) {
         Graph<City, DefaultWeightedEdge> graph = new DefaultUndirectedWeightedGraph<>(DefaultWeightedEdge.class);
 
         // Add vertices to the graph
@@ -447,10 +513,60 @@ public class TspSolver extends Application {
         for (DefaultWeightedEdge edge : matching) {
             City source = graph.getEdgeSource(edge);
             City target = graph.getEdgeTarget(edge);
-//            result.add(new Edge(source, target));
+            double weight = graph.getEdgeWeight(edge);
+            result.add(new Edge(source, target, weight));
         }
 
         return result;
+    }*/
+
+    private List<Edge> combineMSTAndMatching(List<Edge> mst, List<Edge> matching) {
+        List<Edge> multigraph = new ArrayList<>(mst);
+        multigraph.addAll(matching);
+        return multigraph;
     }
 
+    private List<City> findEulerianCircuit(List<Edge> multigraph) {
+        Map<City, List<City>> adjacencyList = buildAdjacencyList(multigraph);
+        List<City> tour = new ArrayList<>();
+        Stack<City> stack = new Stack<>();
+        City startVertex = multigraph.get(0).source;
+
+        stack.push(startVertex);
+        while (!stack.isEmpty()) {
+            City currentVertex = stack.peek();
+            if (adjacencyList.get(currentVertex).size() > 0) {
+                City nextVertex = adjacencyList.get(currentVertex).iterator().next();
+                stack.push(nextVertex);
+                adjacencyList.get(currentVertex).remove(nextVertex);
+                adjacencyList.get(nextVertex).remove(currentVertex);
+            } else {
+                stack.pop();
+                tour.add(currentVertex);
+            }
+        }
+        return tour;
+    }
+
+    private Map<City, List<City>> buildAdjacencyList(List<Edge> edges) {
+        Map<City, List<City>> adjacencyList = new HashMap<>();
+        for (Edge edge : edges) {
+            adjacencyList.computeIfAbsent(edge.source, k -> new ArrayList<>()).add(edge.target);
+            adjacencyList.computeIfAbsent(edge.target, k -> new ArrayList<>()).add(edge.source);
+        }
+        return adjacencyList;
+    }
+
+    private List<City> convertEulerianToHamiltonian(List<City> eulerianCircuit) {
+        List<City> hamiltonianCycle = new ArrayList<>();
+        Set<Integer> visitedCityIds = new HashSet<>();
+
+        for (City city : eulerianCircuit) {
+            if (visitedCityIds.add(city.getId())) {
+                hamiltonianCycle.add(city);
+            }
+        }
+        hamiltonianCycle.add(eulerianCircuit.get(0)); // Close the cycle by adding the starting city
+        return hamiltonianCycle;
+    }
 }
