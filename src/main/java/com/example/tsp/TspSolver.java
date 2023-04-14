@@ -74,15 +74,14 @@ public class TspSolver extends Application {
         Button btn2Opt = new Button("2-Opt");
         btn2Opt.setOnAction(e -> twoOptOptimization(canvas, christofideTour));
 
-        double initialTemperature = 10000;
-        double finalTemperature = 0.1;
-        double coolingRate = 0.995;
-        long maxExecutionTimeMillis = 60000; // 1 minute
         Button btnSimAnneal = new Button("Simulated Annealing");
-        btnSimAnneal.setOnAction(e-> simulatedAnnealingOptimization(canvas, christofideTourAfter2Opt, initialTemperature, finalTemperature, coolingRate, maxExecutionTimeMillis));
+        btnSimAnneal.setOnAction(e-> anneal(canvas, christofideTour));
 
         Button btnNN = new Button("Nearest neighbor method");
         btnNN.setOnAction(e -> nearestNeighbor(canvas));
+
+        Button btnAntColony = new Button("Ant Colony");
+        btnAntColony.setOnAction(e -> antColonyOpt(canvas, christofideTour));
 
         /*Button btnOpt2 = new Button("2-opt method");
         btnOpt2.setOnAction(e -> twoOpt(canvas));*/
@@ -110,7 +109,7 @@ public class TspSolver extends Application {
         });
 
 
-        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnRandom);
+        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnAntColony, btnRandom);
         buttons.setSpacing(10);
 
         VBox root = new VBox(10, canvas, buttons, solutionCostLabel);
@@ -618,41 +617,103 @@ public class TspSolver extends Application {
         }
     }
 
-    public void simulatedAnnealingOptimization(Pane canvas, List<City> tour, double initialTemperature, double finalTemperature, double coolingRate, long maxExecutionTimeMillis) {
+    public List<City> simulatedAnnealingOptimization(List<City> tour, double coolingRate, long maxExecutionTimeMillis, int maxStagnation) {
         List<City> currentTour = new ArrayList<>(tour);
         List<City> bestTour = new ArrayList<>(tour);
         double currentEnergy = calculateTourDistance(currentTour);
         double bestEnergy = currentEnergy;
 
-        long startTime = System.currentTimeMillis();
+        double initialTemperature = calculateInitialTemperature(currentTour);
         double temperature = initialTemperature;
 
+        long startTime = System.currentTimeMillis();
         Random random = new Random();
 
-        while (temperature > finalTemperature && System.currentTimeMillis() - startTime < maxExecutionTimeMillis) {
-            int index1 = random.nextInt(tour.size() - 1) + 1;
-            int index2 = random.nextInt(tour.size() - 1) + 1;
+        int stagnationCounter = 0;
 
-            List<City> newTour = new ArrayList<>(currentTour);
-            reverseSubList(newTour, Math.min(index1, index2), Math.max(index1, index2));
+        while (System.currentTimeMillis() - startTime < maxExecutionTimeMillis && stagnationCounter < maxStagnation) {
+            int index1 = random.nextInt(tour.size());
+            int index2 = random.nextInt(tour.size());
 
-            double newEnergy = calculateTourDistance(newTour);
-            double deltaEnergy = newEnergy - currentEnergy;
+            City city1 = currentTour.get(index1);
+            City city2 = currentTour.get(index2);
 
-            if (deltaEnergy < 0 || Math.exp(-deltaEnergy / temperature) > random.nextDouble()) {
-                currentTour = newTour;
-                currentEnergy = newEnergy;
+            double oldDistance = getDistanceBetweenAdjacentCities(currentTour, index1) +
+                    getDistanceBetweenAdjacentCities(currentTour, index2);
 
+            Collections.swap(currentTour, index1, index2);
+
+            double newDistance = getDistanceBetweenAdjacentCities(currentTour, index1) +
+                    getDistanceBetweenAdjacentCities(currentTour, index2);
+
+            double deltaEnergy = newDistance - oldDistance;
+
+            if (deltaEnergy < 0 || acceptanceProbability(deltaEnergy, temperature) > random.nextDouble()) {
+                currentEnergy += deltaEnergy;
                 if (currentEnergy < bestEnergy) {
-                    bestTour = currentTour;
+                    bestTour = new ArrayList<>(currentTour);
                     bestEnergy = currentEnergy;
+                    stagnationCounter = 0;
+                } else {
+                    stagnationCounter++;
                 }
+            } else {
+                Collections.swap(currentTour, index1, index2);
+                stagnationCounter++;
             }
 
-            temperature *= (1 - coolingRate);
+            temperature = annealingSchedule(temperature, coolingRate, initialTemperature, System.currentTimeMillis() - startTime, maxExecutionTimeMillis);
         }
 
+        return bestTour;
+    }
+
+    private double calculateInitialTemperature(List<City> tour) {
+        double avgDistance = calculateTourDistanceSim(tour) / tour.size();
+        return avgDistance / 10;
+    }
+
+    private double getDistanceBetweenAdjacentCities(List<City> tour, int index) {
+        City city1 = tour.get(index);
+        City city2 = tour.get((index + 1) % tour.size());
+        return city1.distanceTo(city2);
+    }
+
+    private double acceptanceProbability(double energyDifference, double temperature) {
+        return Math.exp(-energyDifference / temperature);
+    }
+
+    private double annealingSchedule(double temperature, double coolingRate, double initialTemperature, long elapsedTime, long maxExecutionTime) {
+        return initialTemperature * Math.pow(coolingRate, elapsedTime / (double) maxExecutionTime);
+    }
+
+    private double calculateTourDistanceSim(List<City> tour) {
+        double totalDistance = 0;
+        for (int i = 0; i < tour.size(); i++) {
+            totalDistance += getDistanceBetweenAdjacentCities(tour, i);
+        }
+        return totalDistance;
+    }
+
+    private void anneal(Pane canvas, List<City> tour) {
+        double initialTemperature = 1000;
+        double finalTemperature = 0.01;
+        double coolingRate = 0.9995;
+        long maxExecutionTimeMillis = 30000; // 30 seconds
+        int maxStagnation = 5000;
+        //List<City> bestTour = simulatedAnnealingOptimization(tour, coolingRate, maxExecutionTimeMillis, maxStagnation);
+        List<City> bestTour = simAnneal(tour, initialTemperature, coolingRate);
         displayData(canvas, bestTour, Color.CHOCOLATE);
+    }
+
+    private void antColonyOpt(Pane canvas, List<City> tour) {
+        int numAnts = 25;
+        int numIterations = 500;
+        double alpha = 1.0;
+        double beta = 5.0;
+        double evaporationRate = 0.1;
+        List<City> optimizedTour = antColonyOptimization(tour, numAnts, numIterations, alpha, beta, evaporationRate);
+        displayData(canvas, optimizedTour, Color.INDIGO);
     }
 
     private double calculateTourDistance(List<City> tour) {
@@ -661,5 +722,161 @@ public class TspSolver extends Application {
             totalDistance += tour.get(i).distanceTo(tour.get(i + 1));
         }
         return totalDistance;
+    }
+
+    public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
+        Map<Integer, Integer> cityIndices = new HashMap<>();
+        for (int i = 0; i < initialTour.size(); i++) {
+            cityIndices.put(initialTour.get(i).getId(), i);
+        }
+
+        double[][] pheromoneLevels = initializePheromoneLevels(initialTour.size());
+        double[][] distances = calculateDistances(initialTour);
+
+        List<City> bestTour = new ArrayList<>(initialTour);
+        double bestTourDistance = calculateTourDistance(initialTour);
+
+        for (int iteration = 0; iteration < numIterations; iteration++) {
+            List<List<City>> antTours = new ArrayList<>();
+
+            for (int i = 0; i < numAnts; i++) {
+                List<City> antTour = constructAntTour(initialTour, distances, pheromoneLevels, alpha, beta, cityIndices);
+                antTours.add(antTour);
+                double antTourDistance = calculateTourDistance(antTour);
+
+                if (antTourDistance < bestTourDistance) {
+                    bestTour = new ArrayList<>(antTour);
+                    bestTourDistance = antTourDistance;
+                }
+            }
+
+            updatePheromoneLevels(pheromoneLevels, antTours, evaporationRate, cityIndices);
+        }
+
+        return bestTour;
+    }
+
+    private double[][] initializePheromoneLevels(int numCities) {
+        double[][] pheromoneLevels = new double[numCities][numCities];
+        for (int i = 0; i < numCities; i++) {
+            for (int j = 0; j < numCities; j++) {
+                pheromoneLevels[i][j] = 1.0;
+            }
+        }
+        return pheromoneLevels;
+    }
+
+    private double[][] calculateDistances(List<City> cities) {
+        int numCities = cities.size();
+        double[][] distances = new double[numCities][numCities];
+        for (int i = 0; i < numCities; i++) {
+            for (int j = 0; j < numCities; j++) {
+                distances[i][j] = cities.get(i).distanceTo(cities.get(j));
+            }
+        }
+        return distances;
+    }
+
+    private List<City> constructAntTour(List<City> cities, double[][] distances, double[][] pheromoneLevels, double alpha, double beta, Map<Integer, Integer> cityIndices) {
+        List<City> tour = new ArrayList<>();
+        List<City> remainingCities = new ArrayList<>(cities);
+
+        City startCity = remainingCities.remove(0);
+        tour.add(startCity);
+        City currentCity = startCity;
+
+        Random random = new Random();
+        while (!remainingCities.isEmpty()) {
+            double totalProbability = 0;
+            for (City city : remainingCities) {
+                int i = cityIndices.get(currentCity.getId());
+                int j = cityIndices.get(city.getId());
+                totalProbability += Math.pow(pheromoneLevels[i][j], alpha) * Math.pow(1 / distances[i][j], beta);
+            }
+
+            double selectionValue = random.nextDouble() * totalProbability;
+            double accumulatedProbability = 0;
+            City nextCity = null;
+            Iterator<City> iterator = remainingCities.iterator();
+            while (iterator.hasNext() && nextCity == null) {
+                City city = iterator.next();
+                int i = cityIndices.get(currentCity.getId());
+                int j = cityIndices.get(city.getId());
+                accumulatedProbability += Math.pow(pheromoneLevels[i][j], alpha) * Math.pow(1 / distances[i][j], beta);
+                if (accumulatedProbability >= selectionValue) {
+                    nextCity = city;
+                    iterator.remove();
+                }
+            }
+
+            tour.add(nextCity);
+            currentCity = nextCity;
+        }
+
+        tour.add(startCity);
+        return tour;
+    }
+
+    private void updatePheromoneLevels(double[][] pheromoneLevels, List<List<City>> antTours, double evaporationRate, Map<Integer, Integer> cityIndices) {
+        int numCities = pheromoneLevels.length;
+
+        // Evaporate pheromones
+        for (int i = 0; i < numCities; i++) {
+            for (int j = 0; j < numCities; j++) {
+                pheromoneLevels[i][j] *= (1 - evaporationRate);
+            }
+        }
+
+        // Add new pheromones
+        for (List<City> tour : antTours) {
+            double tourDistance = calculateTourDistance(tour);
+
+            for (int i = 0; i < tour.size() - 1; i++) {
+                City city1 = tour.get(i);
+                City city2 = tour.get(i + 1);
+
+                int id1 = cityIndices.get(city1.getId());
+                int id2 = cityIndices.get(city2.getId());
+
+                pheromoneLevels[id1][id2] += 1 / tourDistance;
+                pheromoneLevels[id2][id1] += 1 / tourDistance;
+            }
+        }
+    }
+
+    private List<City> simAnneal(List<City> tour, double temperature, double coolingRate) {
+        List<City> currentTour = new ArrayList<>(tour);
+        Collections.shuffle(currentTour);
+        List<City> bestTour = new ArrayList<>(currentTour);
+        Collections.shuffle(bestTour);
+
+        for (double t = temperature; t > 1; t *= coolingRate) {
+            List<City> neighbor = new ArrayList<>(currentTour);
+            Collections.shuffle(neighbor);
+
+            int index1 = (int) (neighbor.size() * Math.random());
+            int index2 = (int) (neighbor.size() * Math.random());
+
+            Collections.swap(neighbor, index1, index2);
+
+            double currentLength = calculateTourDistance(currentTour);
+            double neighborLength = calculateTourDistance(neighbor);
+
+            if (Math.random() < probability(currentLength, neighborLength, t)) {
+                currentTour = new ArrayList<>(neighbor);
+                Collections.shuffle(currentTour);
+            }
+
+            if (calculateTourDistance(currentTour) < calculateTourDistance(bestTour)) {
+                bestTour = new ArrayList<>(currentTour);
+                Collections.shuffle(bestTour);
+            }
+        }
+        return bestTour;
+    }
+
+    private double probability(double f1, double f2, double temp) {
+        if (f2 < f1) return 1;
+        return Math.exp((f1 - f2) / temp);
     }
 }
