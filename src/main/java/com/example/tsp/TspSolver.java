@@ -29,6 +29,10 @@ public class TspSolver extends Application {
     private List<City> cities = new ArrayList<>();
     private List<Line> lines = new ArrayList<>();
 
+    private List<City> christofideTour = new ArrayList<>();
+
+    private List<City> christofideTourAfter2Opt = new ArrayList<>();
+
     // Create a slider with a range of values from 0 to 1000 milliseconds
 
     Label solutionCostLabel = new Label("Solution cost: N/A");
@@ -67,11 +71,21 @@ public class TspSolver extends Application {
         Button btnChristofides = new Button("Christofides");
         btnChristofides.setOnAction(e -> christofidesAlgorithm(canvas));
 
+        Button btn2Opt = new Button("2-Opt");
+        btn2Opt.setOnAction(e -> twoOptOptimization(canvas, christofideTour));
+
+        double initialTemperature = 10000;
+        double finalTemperature = 0.1;
+        double coolingRate = 0.995;
+        long maxExecutionTimeMillis = 60000; // 1 minute
+        Button btnSimAnneal = new Button("Simulated Annealing");
+        btnSimAnneal.setOnAction(e-> simulatedAnnealingOptimization(canvas, christofideTourAfter2Opt, initialTemperature, finalTemperature, coolingRate, maxExecutionTimeMillis));
+
         Button btnNN = new Button("Nearest neighbor method");
         btnNN.setOnAction(e -> nearestNeighbor(canvas));
 
-        Button btnOpt2 = new Button("2-opt method");
-        btnOpt2.setOnAction(e -> twoOpt(canvas));
+        /*Button btnOpt2 = new Button("2-opt method");
+        btnOpt2.setOnAction(e -> twoOpt(canvas));*/
 
         Button btnRandom = new Button("Generate random TSP");
         btnRandom.setOnAction(e -> {
@@ -96,7 +110,7 @@ public class TspSolver extends Application {
         });
 
 
-        HBox buttons = new HBox(10, btnClear, btnChristofides, btnNN, btnOpt2, btnRandom);
+        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnRandom);
         buttons.setSpacing(10);
 
         VBox root = new VBox(10, canvas, buttons, solutionCostLabel);
@@ -242,7 +256,7 @@ public class TspSolver extends Application {
         lines.add(line);
         canvas.getChildren().add(line);
 
-        highlightSolution();
+        highlightSolution(Color.RED);
         solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost()));
     }
 
@@ -293,15 +307,20 @@ public class TspSolver extends Application {
         List<City> eulerianTour = findEulerianCircuit(multigraph);
         List<City> hamiltonianTour = convertEulerianToHamiltonian(eulerianTour);
 
-        if (hamiltonianTour.size() < 2) {
+        christofideTour = new ArrayList<>(hamiltonianTour);
+        displayData(canvas, hamiltonianTour, Color.AQUA);
+    }
+
+    private void displayData(Pane canvas, List<City> cities, Color color) {
+        if (cities.size() < 2) {
             return;
         }
         clearLines(canvas);
         resetLinesColor();
 
-        for (int i = 0; i < hamiltonianTour.size() - 1; i++) {
-            City from = hamiltonianTour.get(i);
-            City to = hamiltonianTour.get(i + 1);
+        for (int i = 0; i < cities.size() - 1; i++) {
+            City from = cities.get(i);
+            City to = cities.get(i + 1);
 
             Line line = new Line(from.getX(), from.getY(), to.getX(), to.getY());
             lines.add(line);
@@ -309,15 +328,14 @@ public class TspSolver extends Application {
         }
 
         double cost = 0.0;
-        for (int i = 0; i < hamiltonianTour.size(); i++) {
-            City currentCity = hamiltonianTour.get(i);
-            City nextCity = hamiltonianTour.get((i + 1) % hamiltonianTour.size());
+        for (int i = 0; i < cities.size(); i++) {
+            City currentCity = cities.get(i);
+            City nextCity = cities.get((i + 1) % cities.size());
             cost += currentCity.distanceTo(nextCity);
         }
-        highlightSolution();
+        highlightSolution(color);
         solutionCostLabel.setText("Solution cost: " + String.format("%.2f", cost));
     }
-
 
     private boolean swapIsBetter(int i, int j) {
         City a = cities.get(i);
@@ -343,9 +361,9 @@ public class TspSolver extends Application {
         }
     }
 
-    private void highlightSolution() {
+    private void highlightSolution(Color color) {
         for (Line line : lines) {
-            line.setStroke(Color.RED);
+            line.setStroke(color);
         }
     }
 
@@ -568,5 +586,80 @@ public class TspSolver extends Application {
         }
         hamiltonianCycle.add(eulerianCircuit.get(0)); // Close the cycle by adding the starting city
         return hamiltonianCycle;
+    }
+
+    public void twoOptOptimization(Pane canvas, List<City> tour) {
+        boolean improved = true;
+
+        while (improved) {
+            improved = false;
+
+            for (int i = 0; i < tour.size() - 2; i++) {
+                for (int j = i + 2; j < tour.size() - 1; j++) {
+                    double oldDistance = tour.get(i).distanceTo(tour.get(i + 1)) + tour.get(j).distanceTo(tour.get(j + 1));
+                    double newDistance = tour.get(i).distanceTo(tour.get(j)) + tour.get(i + 1).distanceTo(tour.get(j + 1));
+
+                    if (newDistance < oldDistance) {
+                        reverseSubList(tour, i + 1, j);
+                        improved = true;
+                    }
+                }
+            }
+        }
+        christofideTourAfter2Opt = new ArrayList<>(tour);
+        displayData(canvas, tour, Color.DARKMAGENTA);
+    }
+
+    private void reverseSubList(List<City> list, int start, int end) {
+        while (start < end) {
+            Collections.swap(list, start, end);
+            start++;
+            end--;
+        }
+    }
+
+    public void simulatedAnnealingOptimization(Pane canvas, List<City> tour, double initialTemperature, double finalTemperature, double coolingRate, long maxExecutionTimeMillis) {
+        List<City> currentTour = new ArrayList<>(tour);
+        List<City> bestTour = new ArrayList<>(tour);
+        double currentEnergy = calculateTourDistance(currentTour);
+        double bestEnergy = currentEnergy;
+
+        long startTime = System.currentTimeMillis();
+        double temperature = initialTemperature;
+
+        Random random = new Random();
+
+        while (temperature > finalTemperature && System.currentTimeMillis() - startTime < maxExecutionTimeMillis) {
+            int index1 = random.nextInt(tour.size() - 1) + 1;
+            int index2 = random.nextInt(tour.size() - 1) + 1;
+
+            List<City> newTour = new ArrayList<>(currentTour);
+            reverseSubList(newTour, Math.min(index1, index2), Math.max(index1, index2));
+
+            double newEnergy = calculateTourDistance(newTour);
+            double deltaEnergy = newEnergy - currentEnergy;
+
+            if (deltaEnergy < 0 || Math.exp(-deltaEnergy / temperature) > random.nextDouble()) {
+                currentTour = newTour;
+                currentEnergy = newEnergy;
+
+                if (currentEnergy < bestEnergy) {
+                    bestTour = currentTour;
+                    bestEnergy = currentEnergy;
+                }
+            }
+
+            temperature *= (1 - coolingRate);
+        }
+
+        displayData(canvas, bestTour, Color.CHOCOLATE);
+    }
+
+    private double calculateTourDistance(List<City> tour) {
+        double totalDistance = 0;
+        for (int i = 0; i < tour.size() - 1; i++) {
+            totalDistance += tour.get(i).distanceTo(tour.get(i + 1));
+        }
+        return totalDistance;
     }
 }
