@@ -14,6 +14,9 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.stage.Stage;
+
+import java.util.concurrent.*;
+
 import org.jgrapht.Graph;
 import org.jgrapht.alg.matching.KuhnMunkresMinimalWeightBipartitePerfectMatching;
 import org.jgrapht.graph.DefaultUndirectedWeightedGraph;
@@ -707,8 +710,8 @@ public class TspSolver extends Application {
     }
 
     private void antColonyOpt(Pane canvas, List<City> tour) {
-        int numAnts = 25;
-        int numIterations = 500;
+        int numAnts = 50;
+        int numIterations = 1000;
         double alpha = 1.0;
         double beta = 5.0;
         double evaporationRate = 0.1;
@@ -724,7 +727,7 @@ public class TspSolver extends Application {
         return totalDistance;
     }
 
-    public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
+    /*public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
         Map<Integer, Integer> cityIndices = new HashMap<>();
         for (int i = 0; i < initialTour.size(); i++) {
             cityIndices.put(initialTour.get(i).getId(), i);
@@ -753,6 +756,52 @@ public class TspSolver extends Application {
             updatePheromoneLevels(pheromoneLevels, antTours, evaporationRate, cityIndices);
         }
 
+        return bestTour;
+    }*/
+
+    public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
+        Map<Integer, Integer> cityIndices = new HashMap<>();
+        for (int i = 0; i < initialTour.size(); i++) {
+            cityIndices.put(initialTour.get(i).getId(), i);
+        }
+
+        double[][] pheromoneLevels = initializePheromoneLevels(initialTour.size());
+        double[][] distances = calculateDistances(initialTour);
+
+        List<City> bestTour = new ArrayList<>(initialTour);
+        double bestTourDistance = calculateTourDistance(initialTour);
+
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+        for (int iteration = 0; iteration < numIterations; iteration++) {
+            List<Future<List<City>>> antTourFutures = new ArrayList<>();
+
+            for (int i = 0; i < numAnts; i++) {
+                Callable<List<City>> callable = () -> constructAntTour(initialTour, distances, pheromoneLevels, alpha, beta, cityIndices);
+                Future<List<City>> future = executor.submit(callable);
+                antTourFutures.add(future);
+            }
+
+            List<List<City>> antTours = new ArrayList<>();
+            for (Future<List<City>> future : antTourFutures) {
+                try {
+                    List<City> antTour = future.get();
+                    antTours.add(antTour);
+                    double antTourDistance = calculateTourDistance(antTour);
+
+                    if (antTourDistance < bestTourDistance) {
+                        bestTour = new ArrayList<>(antTour);
+                        bestTourDistance = antTourDistance;
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            updatePheromoneLevels(pheromoneLevels, antTours, evaporationRate, cityIndices);
+        }
+
+        executor.shutdown();
         return bestTour;
     }
 
