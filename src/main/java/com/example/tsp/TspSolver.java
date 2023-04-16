@@ -33,6 +33,9 @@ import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 import com.google.gson.Gson;
 
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 
 public class TspSolver extends Application {
@@ -48,7 +51,7 @@ public class TspSolver extends Application {
 
     private List<City> christofideTour = new ArrayList<>();
 
-    private List<City> christofideTourAfter2Opt = new ArrayList<>();
+    //private List<City> christofideTourAfter2Opt = new ArrayList<>();
 
     // Create an instance of the JavaBridge class
     private JavaBridge javaBridge = new JavaBridge();
@@ -116,7 +119,7 @@ public class TspSolver extends Application {
         btn2Opt.setOnAction(e -> twoOptOptimization(canvas, christofideTour));
 
         Button btnSimAnneal = new Button("Simulated Annealing");
-        btnSimAnneal.setOnAction(e-> anneal(canvas, christofideTour));
+        btnSimAnneal.setOnAction(e -> anneal(canvas, christofideTour));
 
         Button btnNN = new Button("Nearest neighbor method");
         btnNN.setOnAction(e -> nearestNeighbor(canvas));
@@ -140,6 +143,9 @@ public class TspSolver extends Application {
 
 
 
+
+        Button btnGeneticAlgo = new Button("GA");
+        btnGeneticAlgo.setOnAction(e -> geneticAlgoOpt(canvas, christofideTour));
 
         /*Button btnOpt2 = new Button("2-opt method");
         btnOpt2.setOnAction(e -> twoOpt(canvas));*/
@@ -167,16 +173,13 @@ public class TspSolver extends Application {
         });
 
 
-
-        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnAntColony, btnRandom, btnLoadCSV);
+        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnAntColony, btnGeneticAlgo, btnRandom, btnLoadCSV);
         buttons.setSpacing(10);
 
         VBox root = new VBox(10,webView,canvas,scrollPane,buttons, solutionCostLabel);
 //        VBox root = new VBox(10,webView,buttons, solutionCostLabel);
 
         root.setSpacing(10);
-
-
 
 
         Scene scene = new Scene(root, CANVAS_WIDTH, CANVAS_HEIGHT + 50);
@@ -372,8 +375,6 @@ public class TspSolver extends Application {
         christofideTour = new ArrayList<>(hamiltonianTour);
         displayData(canvas, hamiltonianTour, Color.AQUA);
     }
-
-
 
     private void displayData(Pane canvas, List<City> cities, Color color) {
         if (cities.size() < 2) {
@@ -645,7 +646,6 @@ public class TspSolver extends Application {
                 }
             }
         }
-        christofideTourAfter2Opt = new ArrayList<>(tour);
         displayData(canvas, tour, Color.DARKMAGENTA);
     }
 
@@ -754,6 +754,16 @@ public class TspSolver extends Application {
         double evaporationRate = 0.1;
         List<City> optimizedTour = antColonyOptimization(tour, numAnts, numIterations, alpha, beta, evaporationRate);
         displayData(canvas, optimizedTour, Color.INDIGO);
+    }
+
+    private void geneticAlgoOpt(Pane canvas, List<City> tour) {
+        int populationSize = 50;
+        int generations = 100;
+        double mutationRate = 0.01;
+        int tournamentSize = 5;
+        GeneticAlgorithm geneticAlgorithm = new GeneticAlgorithm(populationSize, generations, mutationRate, tournamentSize);
+        List<City> optimizedTour = geneticAlgorithm.optimizeTour(tour);
+        displayData(canvas, optimizedTour, Color.HOTPINK);
     }
 
     private double calculateTourDistance(List<City> tour) {
