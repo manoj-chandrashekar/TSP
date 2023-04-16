@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaflet Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.1/papaparse.min.js"></script>
+
+    <input type="file" id="csv-file" accept=".csv" />
+    <style>
+        #map {
+            height: 100vh;
+            width: 100vw;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+
+    let polyline = null;
+
+    function connectPoints(data) {
+        // Clear existing polyline if it exists
+        if (polyline) {
+            polyline.remove();
+        }
+
+        // Create an array of coordinates from the data
+        const coordinates = data.map((row) => {
+            return [parseFloat(row.latitude), parseFloat(row.longitude)];
+        });
+
+        // Add a polyline connecting the coordinates
+        polyline = L.polyline(coordinates, { color: 'red', weight: 2 }).addTo(map);
+    }
+
+    function plotPointsOnMap(data) {
+        for (const row of data) {
+            const latitude = parseFloat(row.Latitude);
+            const longitude = parseFloat(row.Longitude);
+
+            const marker = L.marker([latitude, longitude]).addTo(map);
+            marker.bindPopup(`<b>Crime ID:</b> ${row.Crime_ID}<br/><b>Coordinates:</b> (${latitude}, ${longitude})`);
+
+        }
+
+        // Connect the points with lines
+        connectPoints(data);
+    }
+
+    var map = L.map('map').setView([51.505, -0.09], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // L.marker([51.5, -0.09]).addTo(map)
+    //     .bindPopup('A sample marker')
+    //     .openPopup();
+    function loadCSVFile(file) {
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                const data = results.data;
+                plotPointsOnMap(data);
+            },
+        });
+    }
+
+    function plotPointsOnMap(data) {
+        for (const row of data) {
+            const latitude = parseFloat(row.Latitude);
+            const longitude = parseFloat(row.Longitude);
+
+            const marker = L.marker([latitude, longitude]).addTo(map);
+            marker.bindPopup(`<b>Crime ID:</b> ${row.Crime_ID}<br/><b>Coordinates:</b> (${latitude}, ${longitude})`);
+        }
+    }
+
+    function updatePointsAndLines(data, newOrder) {
+        const newData = newOrder.map((index) => data[index]);
+
+        // Clear the markers and polyline from the map
+        map.eachLayer((layer) => {
+            if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+                layer.remove();
+            }
+        });
+
+        // Plot the new points and lines
+        plotPointsOnMap(newData);
+    }
+
+    document.getElementById("csv-file").addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            loadCSVFile(file);
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        javaBridge.messageProperty().addListener((observable, oldValue, newValue) => {
+            const message = JSON.parse(newValue);
+            updatePointsAndLines(message.data, message.newOrder);
+        });
+    });
+    function updateMapData(dataJson, newOrderJson) {
+        // Parse the JSON strings
+        const data = JSON.parse(dataJson);
+        const newOrder = JSON.parse(newOrderJson);
+
+        // Clear previous lines (if any)
+        linesGroup.clearLayers();
+
+        // Draw new lines on the map
+        for (let i = 0; i < newOrder.length - 1; i++) {
+            const start = data[newOrder[i]];
+            const end = data[newOrder[i + 1]];
+
+            const line = L.polyline([start, end], { color: 'blue' });
+            line.addTo(linesGroup);
+        }
+
+        // Close the tour (connect the last point to the first one)
+        const first = data[newOrder[0]];
+        const last = data[newOrder[newOrder.length - 1]];
+
+        const closingLine = L.polyline([last, first], { color: 'blue' });
+        closingLine.addTo(linesGroup);
+    }
+
+
+
+
+</script>
+</body>
+</html>

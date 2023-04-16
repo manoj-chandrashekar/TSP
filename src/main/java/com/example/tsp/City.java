@@ -7,9 +7,9 @@ package com.example.tsp;
 public class City {
     private static int idCounter = 0;
 
-    private final int id;
-    private final double x;
-    private final double y;
+    private  int id;
+    private  double x;
+    private  double y;
 
     public City(double x, double y) {
         this.id = idCounter++;
@@ -27,6 +27,12 @@ public class City {
 
     public double getY() {
         return y;
+    }
+    public void setY(double y) {
+        this.y = y;
+    }
+    public void setX(double x) {
+        this.x = x;
     }
 
     @Override
