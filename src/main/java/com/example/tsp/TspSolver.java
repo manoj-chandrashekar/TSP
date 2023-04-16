@@ -1,11 +1,12 @@
 package com.example.tsp;
 
+import com.opencsv.CSVReader;
+import com.opencsv.exceptions.CsvException;
 import javafx.application.Application;
+import javafx.concurrent.Worker;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextInputDialog;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -13,21 +14,34 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
 import java.util.concurrent.*;
 
-import org.jgrapht.Graph;
-import org.jgrapht.alg.matching.KuhnMunkresMinimalWeightBipartitePerfectMatching;
-import org.jgrapht.graph.DefaultUndirectedWeightedGraph;
-import org.jgrapht.graph.DefaultWeightedEdge;
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebView;
+import javafx.stage.Stage;
+import netscape.javascript.JSObject;
+import com.google.gson.Gson;
 
-import java.util.*;
 
 
 public class TspSolver extends Application {
-    private static final double CANVAS_WIDTH = 800;
-    private static final double CANVAS_HEIGHT = 800;
+    private static final double CANVAS_WIDTH = 1000;
+    private static final double CANVAS_HEIGHT = 1000;
+
+    private static final String MAP_HTML = "/map.html";
+
+    private static final double CANVAS_MARGIN = 50;
 
     private List<City> cities = new ArrayList<>();
     private List<Line> lines = new ArrayList<>();
@@ -35,6 +49,9 @@ public class TspSolver extends Application {
     private List<City> christofideTour = new ArrayList<>();
 
     private List<City> christofideTourAfter2Opt = new ArrayList<>();
+
+    // Create an instance of the JavaBridge class
+    private JavaBridge javaBridge = new JavaBridge();
 
     // Create a slider with a range of values from 0 to 1000 milliseconds
 
@@ -66,7 +83,28 @@ public class TspSolver extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        Pane canvas = createCanvas();
+        Pane canvas = new Pane();
+        canvas.setPrefSize(CANVAS_WIDTH, CANVAS_HEIGHT);
+
+
+
+        WebView webView = new WebView();
+        WebEngine webEngine = webView.getEngine();
+        webEngine.load(TspSolver.class.getResource(MAP_HTML).toExternalForm());
+
+
+        // Add the JavaBridge instance to the WebView's WebEngine
+        webEngine.getLoadWorker().stateProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == Worker.State.SUCCEEDED) {
+                JSObject window = (JSObject) webEngine.executeScript("window");
+                window.setMember("javaBridge", javaBridge);
+            }
+        });
+
+        ScrollPane scrollPane = new ScrollPane(canvas);
+        scrollPane.setPannable(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 
         Button btnClear = new Button("Clear all");
         btnClear.setOnAction(e -> clearCanvas(canvas));
@@ -85,6 +123,23 @@ public class TspSolver extends Application {
 
         Button btnAntColony = new Button("Ant Colony");
         btnAntColony.setOnAction(e -> antColonyOpt(canvas, christofideTour));
+
+        Button btnLoadCSV = new Button("Load CSV");
+        btnLoadCSV.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));
+            fileChooser.setTitle("Open CSV File");
+            Path csvPath = fileChooser.showOpenDialog(primaryStage).toPath();
+            try {
+                List<Coordinate> coordinates = loadCSV(csvPath,CANVAS_WIDTH,CANVAS_HEIGHT);
+                plotCoordinatesFromCsv(coordinates, canvas );
+            } catch (IOException | CsvException ex) {
+                ex.printStackTrace();
+            }
+        });
+
+
+
 
         /*Button btnOpt2 = new Button("2-opt method");
         btnOpt2.setOnAction(e -> twoOpt(canvas));*/
@@ -112,11 +167,16 @@ public class TspSolver extends Application {
         });
 
 
-        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnAntColony, btnRandom);
+
+        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnAntColony, btnRandom, btnLoadCSV);
         buttons.setSpacing(10);
 
-        VBox root = new VBox(10, canvas, buttons, solutionCostLabel);
+        VBox root = new VBox(10,webView,canvas,scrollPane,buttons, solutionCostLabel);
+//        VBox root = new VBox(10,webView,buttons, solutionCostLabel);
+
         root.setSpacing(10);
+
+
 
 
         Scene scene = new Scene(root, CANVAS_WIDTH, CANVAS_HEIGHT + 50);
@@ -313,12 +373,23 @@ public class TspSolver extends Application {
         displayData(canvas, hamiltonianTour, Color.AQUA);
     }
 
+
+
     private void displayData(Pane canvas, List<City> cities, Color color) {
         if (cities.size() < 2) {
             return;
         }
         clearLines(canvas);
         resetLinesColor();
+
+        // Convert the new order to JSON
+        Gson gson = new Gson();
+        String dataJson = gson.toJson(this.cities); // The original cities list
+        String newOrderJson = gson.toJson(cities); // The cities list received in this method
+
+        // Update the map data
+        javaBridge.updateMapData(dataJson, newOrderJson);
+
 
         for (int i = 0; i < cities.size() - 1; i++) {
             City from = cities.get(i);
@@ -504,41 +575,7 @@ public class TspSolver extends Application {
 
         return matching;
     }
-    /*private List<Edge> minimumWeightPerfectMatching(List<City> oddDegreeVertices) {
-        Graph<City, DefaultWeightedEdge> graph = new DefaultUndirectedWeightedGraph<>(DefaultWeightedEdge.class);
 
-        // Add vertices to the graph
-        for (City city : oddDegreeVertices) {
-            graph.addVertex(city);
-        }
-
-        // Add edges with weights to the graph
-        for (int i = 0; i < oddDegreeVertices.size(); i++) {
-            for (int j = i + 1; j < oddDegreeVertices.size(); j++) {
-                City city1 = oddDegreeVertices.get(i);
-                City city2 = oddDegreeVertices.get(j);
-                double weight = city1.distanceTo(city2);
-                DefaultWeightedEdge edge = graph.addEdge(city1, city2);
-                graph.setEdgeWeight(edge, weight);
-            }
-        }
-
-        // Apply the Blossom algorithm to find a minimum weight perfect matching
-        KuhnMunkresMinimalWeightBipartitePerfectMatching<City, DefaultWeightedEdge> matcher =
-                new KuhnMunkresMinimalWeightBipartitePerfectMatching<>(graph, new HashSet<>(oddDegreeVertices), new HashSet<>(oddDegreeVertices));
-        Set<DefaultWeightedEdge> matching = matcher.getMatching().getEdges();
-
-        // Convert the matching to a list of edges
-        List<Edge> result = new ArrayList<>();
-        for (DefaultWeightedEdge edge : matching) {
-            City source = graph.getEdgeSource(edge);
-            City target = graph.getEdgeTarget(edge);
-            double weight = graph.getEdgeWeight(edge);
-            result.add(new Edge(source, target, weight));
-        }
-
-        return result;
-    }*/
 
     private List<Edge> combineMSTAndMatching(List<Edge> mst, List<Edge> matching) {
         List<Edge> multigraph = new ArrayList<>(mst);
@@ -727,37 +764,6 @@ public class TspSolver extends Application {
         return totalDistance;
     }
 
-    /*public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
-        Map<Integer, Integer> cityIndices = new HashMap<>();
-        for (int i = 0; i < initialTour.size(); i++) {
-            cityIndices.put(initialTour.get(i).getId(), i);
-        }
-
-        double[][] pheromoneLevels = initializePheromoneLevels(initialTour.size());
-        double[][] distances = calculateDistances(initialTour);
-
-        List<City> bestTour = new ArrayList<>(initialTour);
-        double bestTourDistance = calculateTourDistance(initialTour);
-
-        for (int iteration = 0; iteration < numIterations; iteration++) {
-            List<List<City>> antTours = new ArrayList<>();
-
-            for (int i = 0; i < numAnts; i++) {
-                List<City> antTour = constructAntTour(initialTour, distances, pheromoneLevels, alpha, beta, cityIndices);
-                antTours.add(antTour);
-                double antTourDistance = calculateTourDistance(antTour);
-
-                if (antTourDistance < bestTourDistance) {
-                    bestTour = new ArrayList<>(antTour);
-                    bestTourDistance = antTourDistance;
-                }
-            }
-
-            updatePheromoneLevels(pheromoneLevels, antTours, evaporationRate, cityIndices);
-        }
-
-        return bestTour;
-    }*/
 
     public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
         Map<Integer, Integer> cityIndices = new HashMap<>();
@@ -928,4 +934,91 @@ public class TspSolver extends Application {
         if (f2 < f1) return 1;
         return Math.exp((f1 - f2) / temp);
     }
+
+    private static class Coordinate {
+        String crimeID;
+        double longitude;
+        double latitude;
+    }
+
+    public static List<Coordinate> loadCSV(Path csvFile,double canvasWidth, double canvasHeight) throws IOException, CsvException {
+        try (CSVReader reader = new CSVReader(new FileReader(csvFile.toFile()))) {
+
+
+            List<String[]> data = reader.readAll();
+            List<Coordinate> coordinates = new ArrayList<>();
+
+            double minLatitude = 51.261334;
+            double maxLatitude = 51.684761;
+            double minLongitude = -0.505587;
+            double maxLongitude = 0.297941;
+
+            for (String[] row : data.subList(1, data.size())) {
+
+                if (row.length < 6 || row[4].isEmpty() || row[5].isEmpty()) {
+                    // Skip rows with missing longitude or latitude
+                    continue;
+                }
+                Coordinate coordinate = new Coordinate();
+                coordinate.crimeID = row[0];
+                coordinate.longitude = Double.parseDouble(row[4]);
+                coordinate.latitude = Double.parseDouble(row[5]);
+                coordinates.add(coordinate);
+            }
+
+
+
+
+            return coordinates;
+        }
+    }
+    private void plotCoordinatesFromCsv(List<Coordinate> coordinates, Pane canvas) {
+        clearCanvas(canvas);
+        double padding = 50;
+
+        for (int i = 0; i < coordinates.size(); i++) {
+            Coordinate coordinate = coordinates.get(i);
+            double normalizedX = (coordinate.longitude + 0.505587) / (0.297941 + 0.505587);
+            double normalizedY = (51.684761 - coordinate.latitude) / (51.684761 - 51.261334);
+
+            double x = padding + normalizedX * (CANVAS_WIDTH - 2 * padding);
+            double y = padding + normalizedY * (CANVAS_HEIGHT - 120 - 2 * padding);
+
+            addCityWithoutLine(x, y, canvas);
+
+            Circle circle = new Circle(x, y, 5, Color.BLUE);
+            canvas.getChildren().add(circle);
+
+
+
+
+            // Add a label for the city index
+            Label cityIndexLabel = new Label(Integer.toString(cities.size() - 1));
+            cityIndexLabel.setLayoutX(x + 5);
+            cityIndexLabel.setLayoutY(y - 5);
+            canvas.getChildren().add(cityIndexLabel);
+        }
+
+        // Initialize lines
+        for (int i = 0; i < cities.size() - 1; i++) {
+            City startCity = cities.get(i);
+            City endCity = cities.get(i + 1);
+
+            Line line = new Line(startCity.getX(), startCity.getY(),
+                    endCity.getX(), endCity.getY());
+            lines.add(line);
+            canvas.getChildren().add(line);
+        }
+
+        // Connect the last city to the first one
+        City firstCity = cities.get(0);
+        City lastCity = cities.get(cities.size() - 1);
+
+        Line closingLine = new Line(firstCity.getX(), firstCity.getY(),
+                lastCity.getX(), lastCity.getY());
+        lines.add(closingLine);
+        canvas.getChildren().add(closingLine);
+        solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost()));
+    }
+
 }
