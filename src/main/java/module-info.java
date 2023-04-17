@@ -7,6 +7,8 @@ module com.example.tsp {
     requires javafx.web;
     requires jdk.jsobject;
     requires com.google.gson;
+    requires org.apache.poi.poi;
+    requires org.apache.poi.ooxml;
 
 
     opens com.example.tsp to javafx.fxml,com.google.gson;
