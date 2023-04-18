@@ -1,5 +1,6 @@
 package com.example.tsp;
 
+import com.example.tsp.Utility.FileUtil;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
@@ -15,14 +16,10 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Line;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
@@ -32,15 +29,9 @@ public class TspSolver extends Application {
     private static final double CANVAS_WIDTH = 800;
     private static final double CANVAS_HEIGHT = 800;
 
-    private static final String MAP_HTML = "/map.html";
-
-    private static final double CANVAS_MARGIN = 50;
-
     private List<City> cities = new ArrayList<>();
-    private List<Line> lines = new ArrayList<>();
 
     private List<City> christofideTour = new ArrayList<>();
-    private List<City> tourAfter2Opt = new ArrayList<>();
 
     Label solutionCostLabel = new Label("Solution cost: N/A");
 
@@ -65,32 +56,32 @@ public class TspSolver extends Application {
         btnChristofides.setOnAction(e -> christofidesAlgorithm(linesCanvas));
 
         Button btnRandomSwap = new Button("Random swap");
-        btnRandomSwap.setOnAction(e -> randomSwapping(linesCanvas, christofideTour));
+        btnRandomSwap.setOnAction(e -> randomSwapping(linesCanvas, new ArrayList<>(christofideTour)));
 
         Button btn2Opt = new Button("2-Opt");
-        btn2Opt.setOnAction(e -> twoOptOptimization(linesCanvas, christofideTour));
+        btn2Opt.setOnAction(e -> twoOptOptimization(linesCanvas, new ArrayList<>(christofideTour)));
 
         Button btn3Opt = new Button("3-Opt");
-        btn3Opt.setOnAction(e -> opt3(linesCanvas, christofideTour));
+        btn3Opt.setOnAction(e -> opt3(linesCanvas, new ArrayList<>(christofideTour)));
 
         Button btnSimAnneal = new Button("Simulated Annealing");
-        btnSimAnneal.setOnAction(e -> anneal(linesCanvas, christofideTour));
+        btnSimAnneal.setOnAction(e -> anneal(linesCanvas, new ArrayList<>(christofideTour)));
 
         Button btnNN = new Button("NN");
-        btnNN.setOnAction(e -> nearestNeighbor(linesCanvas));
+        btnNN.setOnAction(e -> nearestNeighbor(linesCanvas, new ArrayList<>(cities)));
 
         Button btnAntColony = new Button("Ant Colony");
-        btnAntColony.setOnAction(e -> antColonyOpt(linesCanvas, christofideTour));
+        btnAntColony.setOnAction(e -> antColonyOpt(linesCanvas, new ArrayList<>(christofideTour)));
 
-        Button btnUpload = new Button("Upload Excel");
+        Button btnUpload = new Button("Upload CSV");
         Label lblStatus = new Label();
         btnUpload.setOnAction(e -> {
             FileChooser fileChooser = new FileChooser();
-            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx", "*.xls"));
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
             File selectedFile = fileChooser.showOpenDialog(primaryStage);
 
             if (selectedFile != null) {
-                List<City> cities = readCitiesFromExcel(selectedFile);
+                List<City> cities = readCitiesFromCSV(selectedFile);
                 this.cities = cities;
                 GraphicsContext citiesGc = citiesCanvas.getGraphicsContext2D();
                 GraphicsContext linesGc = linesCanvas.getGraphicsContext2D();
@@ -138,27 +129,19 @@ public class TspSolver extends Application {
         primaryStage.show();
     }
 
-    private List<City> readCitiesFromExcel(File file) {
+    private List<City> readCitiesFromCSV(File file) {
         List<City> cities = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(file);
-             Workbook workbook = new XSSFWorkbook(fis)) {
-
-            Sheet sheet = workbook.getSheetAt(0);
-            int rows = sheet.getPhysicalNumberOfRows();
-
-            for (int r = 1; r < rows; r++) {
-                Row row = sheet.getRow(r);
-                if (row != null) {
-                    Cell cellCrimeId = row.getCell(0);
-                    Cell cellLongitude = row.getCell(1);
-                    Cell cellLatitude = row.getCell(2);
-                    if (cellCrimeId != null && cellLongitude != null && cellLatitude != null) {
-                        String crimeIdLong = cellCrimeId.getStringCellValue();
-                        String crimeId = crimeIdLong.substring(crimeIdLong.length() - 5);
-                        double longitude = cellLongitude.getNumericCellValue();
-                        double latitude = cellLatitude.getNumericCellValue();
-                        cities.add(new City(longitude, latitude, latitude, longitude, crimeId));
-                    }
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            br.readLine(); // Skip the header row if it exists
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 3) {
+                    String crimeIdLong = values[0];
+                    String crimeId = crimeIdLong.substring(crimeIdLong.length() - 5);
+                    double longitude = Double.parseDouble(values[1]);
+                    double latitude = Double.parseDouble(values[2]);
+                    cities.add(new City(longitude, latitude, latitude, longitude, crimeId));
                 }
             }
         } catch (IOException e) {
@@ -289,13 +272,12 @@ public class TspSolver extends Application {
 
         cities.clear();
         christofideTour.clear();
-        lines.clear();
 
         solutionCostLabel.setText("Solution cost: N/A");
     }
 
 
-    private void nearestNeighbor(Canvas canvas) {
+    private void nearestNeighbor(Canvas canvas, List<City> cities) {
         if (cities.size() < 2) {
             return;
         }
@@ -329,7 +311,7 @@ public class TspSolver extends Application {
 
         gc.strokeLine(firstCity.getX(), firstCity.getY(), lastCity.getX(), lastCity.getY());
 
-        solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost()));
+        solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost(cities)));
     }
 
     private void christofidesAlgorithm(Canvas canvas) {
@@ -337,14 +319,22 @@ public class TspSolver extends Application {
             return;
         }
         List<Edge> mst = minimumSpanningTree(cities);
+        System.out.println("MST: " + mst.size());
         List<City> oddVertices = oddDegreeVertices(cities, mst);
+        System.out.println("Odd degree vertices: " + oddVertices.size());
         List<Edge> matching = minimumWeightPerfectMatching(oddVertices);
+        System.out.println("MWPM: " + matching.size());
         List<Edge> multigraph = combineMSTAndMatching(mst, matching);
+        System.out.println("Combined edges: " + multigraph.size());
         List<City> eulerianTour = findEulerianCircuit(multigraph);
-        List<City> hamiltonianTour = convertEulerianToHamiltonian(eulerianTour);
+        System.out.println("Eulerian circuit: " + eulerianTour.size());
+        List<City> optimizedTour = convertEulerianToHamiltonian(eulerianTour);
+        System.out.println("Hamiltonian cycle: " + optimizedTour.size());
 
-        christofideTour = new ArrayList<>(hamiltonianTour);
-        displayData(canvas, hamiltonianTour, Color.AQUA);
+//        List<City> optimizedTour = ChristofidesTSP.optimize(cities);
+        christofideTour = new ArrayList<>(optimizedTour);
+        displayData(canvas, optimizedTour, Color.AQUA);
+        FileUtil.writeTourToCsv(optimizedTour, "christofide.csv");
     }
 
     private void displayData(Canvas canvas, List<City> cities, Color color) {
@@ -376,6 +366,7 @@ public class TspSolver extends Application {
     private void randomSwapping(Canvas canvas, List<City> tour) {
         List<City> optimizedTour = RandomSwapping.optimize(tour, 10000);
         displayData(canvas, optimizedTour, Color.DARKGREEN);
+        FileUtil.writeTourToCsv(optimizedTour, "randomswap.csv");
     }
 
     public void addCityWithoutLine(double x, double y) {
@@ -526,39 +517,15 @@ public class TspSolver extends Application {
     }
 
     public void twoOptOptimization(Canvas canvas, List<City> tour) {
-        if(tour.size() < 2) return;
-        boolean improved = true;
-
-        while (improved) {
-            improved = false;
-
-            for (int i = 0; i < tour.size() - 2; i++) {
-                for (int j = i + 2; j < tour.size() - 1; j++) {
-                    double oldDistance = tour.get(i).distanceTo(tour.get(i + 1)) + tour.get(j).distanceTo(tour.get(j + 1));
-                    double newDistance = tour.get(i).distanceTo(tour.get(j)) + tour.get(i + 1).distanceTo(tour.get(j + 1));
-
-                    if (newDistance < oldDistance) {
-                        reverseSubList(tour, i + 1, j);
-                        improved = true;
-                    }
-                }
-            }
-        }
-        tourAfter2Opt = new ArrayList<>(tour);
-        displayData(canvas, tour, Color.DARKMAGENTA);
-    }
-
-    private void reverseSubList(List<City> list, int start, int end) {
-        while (start < end) {
-            Collections.swap(list, start, end);
-            start++;
-            end--;
-        }
+        List<City> optimizedTour = TwoOptOptimizer.optimize(tour);
+        displayData(canvas, optimizedTour, Color.DARKMAGENTA);
+        FileUtil.writeTourToCsv(optimizedTour, "twoOpt.csv");
     }
 
     public void opt3(Canvas canvas, List<City> tour) {
         List<City> optimizedTour = TSP3Opt.optimize(tour);
         displayData(canvas, optimizedTour, Color.RED);
+        FileUtil.writeTourToCsv(optimizedTour, "threeOpt.csv");
     }
 
     public void threeOpt(Canvas canvas, List<City> christofideTour, int maxIterations) {
@@ -629,21 +596,27 @@ public class TspSolver extends Application {
         double coolingRate = 0.9995;
         long maxExecutionTimeMillis = 30000; // 30 seconds
         int maxStagnation = 5000;
-        //List<City> bestTour = simAnneal(tour, initialTemperature, coolingRate);
-        SimulatedAnnealingOptimizer optimizer = new SimulatedAnnealingOptimizer(100, 0.995, 10000);
+        SimulatedAnnealingOptimizer optimizer = new SimulatedAnnealingOptimizer(10000, 0.999999, 100);
         List<City> optimizedTour = optimizer.optimizeTour(tour);
 //        List<City> optimizedTour = SimulatedAnnealing.optimize(tour, initialTemperature, coolingRate, 1000);
-        displayData(canvas, optimizedTour, Color.DEEPSKYBLUE);
+        displayData(canvas, optimizedTour, Color.CHOCOLATE);
+        FileUtil.writeTourToCsv(optimizedTour, "simulatedAnnealing.csv");
     }
 
     private void antColonyOpt(Canvas canvas, List<City> tour) {
-        int numAnts = 50;
-        int numIterations = 1000;
+//        int numAnts = 50;
+//        int numIterations = 1000;
+//        double alpha = 1.0;
+//        double beta = 5.0;
+//        double evaporationRate = 0.1;
+        int numAnts = 10;
+        int numIterations = 100;
         double alpha = 1.0;
         double beta = 5.0;
-        double evaporationRate = 0.1;
+        double evaporationRate = 0.7;
         List<City> optimizedTour = antColonyOptimization(tour, numAnts, numIterations, alpha, beta, evaporationRate);
         displayData(canvas, optimizedTour, Color.INDIGO);
+        FileUtil.writeTourToCsv(optimizedTour, "antColony.csv");
     }
 
     private double calculateTourDistance(List<City> tour) {
