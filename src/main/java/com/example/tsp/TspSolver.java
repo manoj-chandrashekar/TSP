@@ -3,42 +3,34 @@ package com.example.tsp;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
 import javafx.application.Application;
-import javafx.concurrent.Worker;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.*;
-import javafx.scene.input.MouseButton;
-import javafx.scene.layout.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
-
-import javafx.application.Application;
-import javafx.scene.Scene;
-import javafx.scene.web.WebEngine;
-import javafx.scene.web.WebView;
-import javafx.stage.Stage;
-import netscape.javascript.JSObject;
-import com.google.gson.Gson;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 
 public class TspSolver extends Application {
@@ -53,6 +45,7 @@ public class TspSolver extends Application {
     private List<Line> lines = new ArrayList<>();
 
     private List<City> christofideTour = new ArrayList<>();
+    private List<City> tourAfter2Opt = new ArrayList<>();
 
     //private List<City> christofideTourAfter2Opt = new ArrayList<>();
 
@@ -64,7 +57,7 @@ public class TspSolver extends Application {
     Label solutionCostLabel = new Label("Solution cost: N/A");
 
 
-    public void addCity(double x, double y, Pane canvas) {
+    /*public void addCity(double x, double y, Pane canvas) {
         City city = new City(x, y);
         cities.add(city);
 
@@ -74,7 +67,7 @@ public class TspSolver extends Application {
             lines.add(line);
             canvas.getChildren().add(line);
         }
-    }
+    }*/
 
 
     public void clear(Pane canvas) {
@@ -111,18 +104,24 @@ public class TspSolver extends Application {
         });*/
 
         Button btnClear = new Button("Clear all");
-        btnClear.setOnAction(e -> clearCanvas(pane));
+        btnClear.setOnAction(e -> clearCanvas(citiesCanvas, linesCanvas));
 
         Button btnChristofides = new Button("Christofides");
         btnChristofides.setOnAction(e -> christofidesAlgorithm(linesCanvas));
 
+        Button btnRandomSwap = new Button("Random swap");
+        btnRandomSwap.setOnAction(e -> randomSwapping(linesCanvas, christofideTour));
+
         Button btn2Opt = new Button("2-Opt");
         btn2Opt.setOnAction(e -> twoOptOptimization(linesCanvas, christofideTour));
+
+        Button btn3Opt = new Button("3-Opt");
+        btn3Opt.setOnAction(e -> opt3(linesCanvas, christofideTour));
 
         Button btnSimAnneal = new Button("Simulated Annealing");
         btnSimAnneal.setOnAction(e -> anneal(linesCanvas, christofideTour));
 
-        Button btnNN = new Button("Nearest neighbor method");
+        Button btnNN = new Button("NN");
         btnNN.setOnAction(e -> nearestNeighbor(linesCanvas));
 
         Button btnAntColony = new Button("Ant Colony");
@@ -142,7 +141,7 @@ public class TspSolver extends Application {
             }
         });
 
-        Button btnUpload = new Button("Upload Excel File");
+        Button btnUpload = new Button("Upload Excel");
         Label lblStatus = new Label();
         btnUpload.setOnAction(e -> {
             FileChooser fileChooser = new FileChooser();
@@ -175,7 +174,7 @@ public class TspSolver extends Application {
             result.ifPresent(numberOfCities -> {
                 try {
                     int numCities = Integer.parseInt(numberOfCities);
-                    generateRandomTsp(numCities, pane);
+                    generateRandomTsp(numCities, linesCanvas, citiesCanvas);
                 } catch (NumberFormatException ex) {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Error");
@@ -187,7 +186,7 @@ public class TspSolver extends Application {
         });
 
 
-        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btn2Opt, btnSimAnneal, btnAntColony, btnGeneticAlgo, btnRandom, btnLoadCSV, btnUpload);
+        HBox buttons = new HBox(10, btnClear, btnNN, btnChristofides, btnRandomSwap, btn2Opt, btn3Opt, btnSimAnneal, btnAntColony, btnGeneticAlgo, btnRandom, btnLoadCSV, btnUpload);
         buttons.setSpacing(10);
 
         VBox root = new VBox(10, pane, buttons, solutionCostLabel);
@@ -213,12 +212,15 @@ public class TspSolver extends Application {
             for (int r = 1; r < rows; r++) {
                 Row row = sheet.getRow(r);
                 if (row != null) {
-                    Cell cellLongitude = row.getCell(4);
-                    Cell cellLatitude = row.getCell(5);
-                    if (cellLongitude != null && cellLatitude != null) {
+                    Cell cellCrimeId = row.getCell(0);
+                    Cell cellLongitude = row.getCell(1);
+                    Cell cellLatitude = row.getCell(2);
+                    if (cellCrimeId != null && cellLongitude != null && cellLatitude != null) {
+                        String crimeIdLong = cellCrimeId.getStringCellValue();
+                        String crimeId = crimeIdLong.substring(crimeIdLong.length() - 5);
                         double longitude = cellLongitude.getNumericCellValue();
                         double latitude = cellLatitude.getNumericCellValue();
-                        cities.add(new City(longitude, latitude));
+                        cities.add(new City(longitude, latitude, crimeId));
                     }
                 }
             }
@@ -238,30 +240,42 @@ public class TspSolver extends Application {
         double minY = cities.stream().mapToDouble(City::getY).min().orElse(0.0);
         double maxY = cities.stream().mapToDouble(City::getY).max().orElse(0.0);
 
+        // Padding
+        double padding = 60;
+
         // Calculate the scaling factors and offsets
-        double scaleX = citiesCanvas.getWidth() / (maxX - minX);
-        double scaleY = citiesCanvas.getHeight() / (maxY - minY);
+        double scaleX = (citiesCanvas.getWidth() - padding) / (maxX - minX);
+        double scaleY = (citiesCanvas.getHeight() - 2 * padding) / (maxY - minY);
         double offsetX = minX;
         double offsetY = maxY;
 
+        double pointRadius = 2.5;
+
         for (int i = 0; i < cities.size(); i++) {
             City city = cities.get(i);
-            double canvasX = (city.getX() - offsetX) * scaleX;
-            double canvasY = (offsetY - city.getY()) * scaleY;
+            double canvasX = 20 + (city.getX() - offsetX) * scaleX;
+            double canvasY = 20 + (offsetY - city.getY()) * scaleY;
 
             city.setX(canvasX); // Update the city's X coordinate
             city.setY(canvasY); // Update the city's Y coordinate
 
             citiesGc.setFill(Color.BLUE);
-            citiesGc.fillOval(canvasX, canvasY, 5, 5);
+            citiesGc.fillOval(canvasX - pointRadius, canvasY - pointRadius,  pointRadius * 2, pointRadius * 2);
 
-            // Draw a line between the cities
-            if (i > 0) {
-                City previousCity = cities.get(i - 1);
-                linesGc.setStroke(Color.BLACK);
-                linesGc.setLineWidth(1);
-                linesGc.strokeLine(previousCity.getX(), previousCity.getY(), city.getX(), city.getY());
-            }
+            // Draw labels
+            /*String labelText = city.getCrimeId();
+            citiesGc.setFill(Color.BLACK);
+            citiesGc.setFont(Font.font(10));
+            citiesGc.fillText(labelText, canvasX + pointRadius * 2, canvasY - pointRadius);*/
+        }
+
+        // Draw lines between cities on the linesCanvas
+        for (int i = 1; i < cities.size(); i++) {
+            City from = cities.get(i - 1);
+            City to = cities.get(i);
+            linesGc.setStroke(Color.BLACK);
+            linesGc.setLineWidth(1);
+            linesGc.strokeLine(from.getX(), from.getY(), to.getX(), to.getY());
         }
 
         // Connect the last city to the first one
@@ -278,47 +292,60 @@ public class TspSolver extends Application {
             City currentCity = cities.get(i);
             City nextCity = cities.get((i + 1) % cities.size());
             cost += currentCity.distanceTo(nextCity);
+//            cost += haversineDistance(currentCity.getY(), currentCity.getX(), nextCity.getY(), nextCity.getX());
         }
         return cost;
     }
 
-    private void generateRandomTsp(int numCities, Pane canvas) {
-        clearCanvas(canvas);
+    public double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        double earthRadius = 6371e3; // Earth's radius in meters
+        double lat1Rad = Math.toRadians(lat1);
+        double lat2Rad = Math.toRadians(lat2);
+        double deltaLat = Math.toRadians(lat2 - lat1);
+        double deltaLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
+                + Math.cos(lat1Rad) * Math.cos(lat2Rad)
+                * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return earthRadius * c;
+    }
+
+    private void generateRandomTsp(int numCities, Canvas linesCanvas, Canvas citiesCanvas) {
+        GraphicsContext linesGc = linesCanvas.getGraphicsContext2D();
+        GraphicsContext citiesGc = citiesCanvas.getGraphicsContext2D();
+        linesGc.clearRect(0, 0, linesCanvas.getWidth(), linesCanvas.getHeight());
+        citiesGc.clearRect(0, 0, citiesCanvas.getWidth(), citiesCanvas.getHeight());
         Random rand = new Random();
         for (int i = 0; i < numCities; i++) {
             double x = rand.nextDouble() * (CANVAS_WIDTH - 20);
             double y = rand.nextDouble() * (CANVAS_HEIGHT - 120);
-            addCityWithoutLine(x, y, canvas);
+            addCityWithoutLine(x, y);
 
-            Circle circle = new Circle(x, y, 5, Color.BLUE);
-            canvas.getChildren().add(circle);
+            citiesGc.setFill(Color.BLUE);
+            citiesGc.fillOval(x - 2.5, y - 2.5, 5, 5);
 
             // Add a label for the city index
-            Label cityIndexLabel = new Label(Integer.toString(cities.size() - 1));
-            cityIndexLabel.setLayoutX(x + 5);
-            cityIndexLabel.setLayoutY(y - 5);
-            canvas.getChildren().add(cityIndexLabel);
+            citiesGc.setFill(Color.BLACK);
+            citiesGc.fillText(Integer.toString(cities.size() - 1), x + 5, y + 5);
         }
 
         // Initialize lines
+        linesGc.setStroke(Color.BLACK);
+        linesGc.setLineWidth(1);
         for (int i = 0; i < cities.size() - 1; i++) {
             City startCity = cities.get(i);
             City endCity = cities.get(i + 1);
 
-            Line line = new Line(startCity.getX(), startCity.getY(),
-                    endCity.getX(), endCity.getY());
-            lines.add(line);
-            canvas.getChildren().add(line);
+            linesGc.strokeLine(startCity.getX(), startCity.getY(), endCity.getX(), endCity.getY());
         }
 
         // Connect the last city to the first one
         City firstCity = cities.get(0);
         City lastCity = cities.get(cities.size() - 1);
 
-        Line closingLine = new Line(firstCity.getX(), firstCity.getY(),
-                lastCity.getX(), lastCity.getY());
-        lines.add(closingLine);
-        canvas.getChildren().add(closingLine);
+        linesGc.strokeLine(firstCity.getX(), firstCity.getY(), lastCity.getX(), lastCity.getY());
         solutionCostLabel.setText("Solution cost: " + String.format("%.2f", calculateSolutionCost()));
     }
 
@@ -330,6 +357,21 @@ public class TspSolver extends Application {
         // Remove all children (circles and labels) from the canvas except for the lines
         canvas.getChildren().removeIf(child -> !(child instanceof Line));
     }
+
+    private void clearCanvas(Canvas citiesCanvas, Canvas linesCanvas) {
+        GraphicsContext citiesGc = citiesCanvas.getGraphicsContext2D();
+        GraphicsContext linesGc = linesCanvas.getGraphicsContext2D();
+
+        citiesGc.clearRect(0, 0, citiesCanvas.getWidth(), citiesCanvas.getHeight());
+        linesGc.clearRect(0, 0, linesCanvas.getWidth(), linesCanvas.getHeight());
+
+        cities.clear();
+        christofideTour.clear();
+        lines.clear();
+
+        solutionCostLabel.setText("Solution cost: N/A");
+    }
+
 
     private void nearestNeighbor(Canvas canvas) {
         if (cities.size() < 2) {
@@ -369,6 +411,9 @@ public class TspSolver extends Application {
     }
 
     private void christofidesAlgorithm(Canvas canvas) {
+        if (cities.size() < 2) {
+            return;
+        }
         List<Edge> mst = minimumSpanningTree(cities);
         List<City> oddVertices = oddDegreeVertices(cities, mst);
         List<Edge> matching = minimumWeightPerfectMatching(oddVertices);
@@ -412,43 +457,13 @@ public class TspSolver extends Application {
         solutionCostLabel.setText("Solution cost: " + String.format("%.2f", cost));
     }
 
-    /*private void displayData(Pane canvas, List<City> cities, Color color) {
-        if (cities.size() < 2) {
-            return;
-        }
-        clearLines(canvas);
-        resetLinesColor();
+    private void randomSwapping(Canvas canvas, List<City> tour) {
+        List<City> optimizedTour = RandomSwapping.optimize(tour, 10000);
+        displayData(canvas, optimizedTour, Color.DARKGREEN);
+    }
 
-        // Convert the new order to JSON
-        Gson gson = new Gson();
-        String dataJson = gson.toJson(this.cities); // The original cities list
-        String newOrderJson = gson.toJson(cities); // The cities list received in this method
-
-        // Update the map data
-        javaBridge.updateMapData(dataJson, newOrderJson);
-
-
-        for (int i = 0; i < cities.size() - 1; i++) {
-            City from = cities.get(i);
-            City to = cities.get(i + 1);
-
-            Line line = new Line(from.getX(), from.getY(), to.getX(), to.getY());
-            lines.add(line);
-            canvas.getChildren().add(line);
-        }
-
-        double cost = 0.0;
-        for (int i = 0; i < cities.size(); i++) {
-            City currentCity = cities.get(i);
-            City nextCity = cities.get((i + 1) % cities.size());
-            cost += currentCity.distanceTo(nextCity);
-        }
-        highlightSolution(color);
-        solutionCostLabel.setText("Solution cost: " + String.format("%.2f", cost));
-    }*/
-
-    public void addCityWithoutLine(double x, double y, Pane canvas) {
-        City city = new City(x, y);
+    public void addCityWithoutLine(double x, double y) {
+        City city = new City(x, y, "");
         cities.add(city);
     }
 
@@ -601,6 +616,7 @@ public class TspSolver extends Application {
     }
 
     public void twoOptOptimization(Canvas canvas, List<City> tour) {
+        if(tour.size() < 2) return;
         boolean improved = true;
 
         while (improved) {
@@ -618,6 +634,7 @@ public class TspSolver extends Application {
                 }
             }
         }
+        tourAfter2Opt = new ArrayList<>(tour);
         displayData(canvas, tour, Color.DARKMAGENTA);
     }
 
@@ -629,82 +646,71 @@ public class TspSolver extends Application {
         }
     }
 
-    public List<City> simulatedAnnealingOptimization(List<City> tour, double coolingRate, long maxExecutionTimeMillis, int maxStagnation) {
-        List<City> currentTour = new ArrayList<>(tour);
-        List<City> bestTour = new ArrayList<>(tour);
-        double currentEnergy = calculateTourDistance(currentTour);
-        double bestEnergy = currentEnergy;
+    public void opt3(Canvas canvas, List<City> tour) {
+        List<City> optimizedTour = TSP3Opt.optimize(tour);
+        displayData(canvas, optimizedTour, Color.RED);
+    }
 
-        double initialTemperature = calculateInitialTemperature(currentTour);
-        double temperature = initialTemperature;
-
-        long startTime = System.currentTimeMillis();
-        Random random = new Random();
-
-        int stagnationCounter = 0;
-
-        while (System.currentTimeMillis() - startTime < maxExecutionTimeMillis && stagnationCounter < maxStagnation) {
-            int index1 = random.nextInt(tour.size());
-            int index2 = random.nextInt(tour.size());
-
-            City city1 = currentTour.get(index1);
-            City city2 = currentTour.get(index2);
-
-            double oldDistance = getDistanceBetweenAdjacentCities(currentTour, index1) +
-                    getDistanceBetweenAdjacentCities(currentTour, index2);
-
-            Collections.swap(currentTour, index1, index2);
-
-            double newDistance = getDistanceBetweenAdjacentCities(currentTour, index1) +
-                    getDistanceBetweenAdjacentCities(currentTour, index2);
-
-            double deltaEnergy = newDistance - oldDistance;
-
-            if (deltaEnergy < 0 || acceptanceProbability(deltaEnergy, temperature) > random.nextDouble()) {
-                currentEnergy += deltaEnergy;
-                if (currentEnergy < bestEnergy) {
-                    bestTour = new ArrayList<>(currentTour);
-                    bestEnergy = currentEnergy;
-                    stagnationCounter = 0;
-                } else {
-                    stagnationCounter++;
+    public void threeOpt(Canvas canvas, List<City> christofideTour, int maxIterations) {
+        int iterations = 0;
+        boolean improved = true;
+        while (improved && iterations < maxIterations) {
+            improved = false;
+            for (int i = 0; i < christofideTour.size() - 2; i++) {
+                for (int j = i + 1; j < christofideTour.size() - 1; j++) {
+                    for (int k = j + 1; k < christofideTour.size(); k++) {
+                        double delta = calculateDelta(christofideTour, i, j, k);
+                        if (delta < 0) {
+                            swap(christofideTour, i + 1, j, k);
+                            improved = true;
+                        }
+                    }
                 }
-            } else {
-                Collections.swap(currentTour, index1, index2);
-                stagnationCounter++;
             }
+            System.out.println("Iteration: "+iterations);
+            iterations++;
+        }
+        displayData(canvas, christofideTour, Color.RED);
+    }
 
-            temperature = annealingSchedule(temperature, coolingRate, initialTemperature, System.currentTimeMillis() - startTime, maxExecutionTimeMillis);
+    public static void swap(List<City> tour, int i, int j, int k) {
+        List<City> temp = new ArrayList<>(tour.size());
+
+        for (int a = 0; a <= i - 1; a++) {
+            temp.add(tour.get(a));
         }
 
-        return bestTour;
-    }
-
-    private double calculateInitialTemperature(List<City> tour) {
-        double avgDistance = calculateTourDistanceSim(tour) / tour.size();
-        return avgDistance / 10;
-    }
-
-    private double getDistanceBetweenAdjacentCities(List<City> tour, int index) {
-        City city1 = tour.get(index);
-        City city2 = tour.get((index + 1) % tour.size());
-        return city1.distanceTo(city2);
-    }
-
-    private double acceptanceProbability(double energyDifference, double temperature) {
-        return Math.exp(-energyDifference / temperature);
-    }
-
-    private double annealingSchedule(double temperature, double coolingRate, double initialTemperature, long elapsedTime, long maxExecutionTime) {
-        return initialTemperature * Math.pow(coolingRate, elapsedTime / (double) maxExecutionTime);
-    }
-
-    private double calculateTourDistanceSim(List<City> tour) {
-        double totalDistance = 0;
-        for (int i = 0; i < tour.size(); i++) {
-            totalDistance += getDistanceBetweenAdjacentCities(tour, i);
+        int dec = 0;
+        for (int a = i; a <= j; a++) {
+            temp.add(tour.get(j - dec));
+            dec++;
         }
-        return totalDistance;
+
+        for (int a = j + 1; a <= k; a++) {
+            temp.add(tour.get(a));
+        }
+
+        for (int a = k + 1; a < tour.size(); a++) {
+            temp.add(tour.get(a));
+        }
+
+        for (int a = 0; a < tour.size(); a++) {
+            tour.set(a, temp.get(a));
+        }
+    }
+
+    private double calculateDelta(List<City> tour, int i, int j, int k) {
+        City city_i = tour.get(i);
+        City city_i1 = tour.get((i + 1) % tour.size());
+        City city_j = tour.get(j);
+        City city_j1 = tour.get((j + 1) % tour.size());
+        City city_k = tour.get(k);
+        City city_k1 = tour.get((k + 1) % tour.size());
+
+        double before = city_i.distanceTo(city_i1) + city_j.distanceTo(city_j1) + city_k.distanceTo(city_k1);
+        double after = city_i.distanceTo(city_j) + city_j1.distanceTo(city_k) + city_k1.distanceTo(city_i1);
+
+        return after - before;
     }
 
     private void anneal(Canvas canvas, List<City> tour) {
@@ -713,9 +719,11 @@ public class TspSolver extends Application {
         double coolingRate = 0.9995;
         long maxExecutionTimeMillis = 30000; // 30 seconds
         int maxStagnation = 5000;
-        //List<City> bestTour = simulatedAnnealingOptimization(tour, coolingRate, maxExecutionTimeMillis, maxStagnation);
-        List<City> bestTour = simAnneal(tour, initialTemperature, coolingRate);
-        displayData(canvas, bestTour, Color.CHOCOLATE);
+        //List<City> bestTour = simAnneal(tour, initialTemperature, coolingRate);
+        SimulatedAnnealingOptimizer optimizer = new SimulatedAnnealingOptimizer(100, 0.995, 10000);
+        List<City> optimizedTour = optimizer.optimizeTour(tour);
+//        List<City> optimizedTour = SimulatedAnnealing.optimize(tour, initialTemperature, coolingRate, 1000);
+        displayData(canvas, optimizedTour, Color.DEEPSKYBLUE);
     }
 
     private void antColonyOpt(Canvas canvas, List<City> tour) {
@@ -881,42 +889,6 @@ public class TspSolver extends Application {
         }
     }
 
-    private List<City> simAnneal(List<City> tour, double temperature, double coolingRate) {
-        List<City> currentTour = new ArrayList<>(tour);
-        Collections.shuffle(currentTour);
-        List<City> bestTour = new ArrayList<>(currentTour);
-        Collections.shuffle(bestTour);
-
-        for (double t = temperature; t > 1; t *= coolingRate) {
-            List<City> neighbor = new ArrayList<>(currentTour);
-            Collections.shuffle(neighbor);
-
-            int index1 = (int) (neighbor.size() * Math.random());
-            int index2 = (int) (neighbor.size() * Math.random());
-
-            Collections.swap(neighbor, index1, index2);
-
-            double currentLength = calculateTourDistance(currentTour);
-            double neighborLength = calculateTourDistance(neighbor);
-
-            if (Math.random() < probability(currentLength, neighborLength, t)) {
-                currentTour = new ArrayList<>(neighbor);
-                Collections.shuffle(currentTour);
-            }
-
-            if (calculateTourDistance(currentTour) < calculateTourDistance(bestTour)) {
-                bestTour = new ArrayList<>(currentTour);
-                Collections.shuffle(bestTour);
-            }
-        }
-        return bestTour;
-    }
-
-    private double probability(double f1, double f2, double temp) {
-        if (f2 < f1) return 1;
-        return Math.exp((f1 - f2) / temp);
-    }
-
     private static class Coordinate {
         String crimeID;
         double longitude;
@@ -966,7 +938,7 @@ public class TspSolver extends Application {
             double x = padding + normalizedX * (CANVAS_WIDTH - 2 * padding);
             double y = padding + normalizedY * (CANVAS_HEIGHT - 120 - 2 * padding);
 
-            addCityWithoutLine(x, y, canvas);
+            addCityWithoutLine(x, y);
 
             Circle circle = new Circle(x, y, 5, Color.BLUE);
             canvas.getChildren().add(circle);

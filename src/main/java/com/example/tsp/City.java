@@ -10,11 +10,13 @@ public class City {
     private  int id;
     private  double x;
     private  double y;
+    private String crimeId;
 
-    public City(double x, double y) {
+    public City(double x, double y, String crimeId) {
         this.id = idCounter++;
         this.x = x;
         this.y = y;
+        this.crimeId = crimeId;
     }
 
     public int getId() {
@@ -33,6 +35,10 @@ public class City {
     }
     public void setX(double x) {
         this.x = x;
+    }
+
+    public String getCrimeId() {
+        return crimeId;
     }
 
     @Override
