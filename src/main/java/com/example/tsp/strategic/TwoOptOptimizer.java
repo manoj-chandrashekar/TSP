@@ -1,7 +1,6 @@
-package com.example.tsp;
+package com.example.tsp.strategic;
 
-import javafx.scene.canvas.Canvas;
-import javafx.scene.paint.Color;
+import com.example.tsp.model.City;
 
 import java.util.ArrayList;
 import java.util.Collections;

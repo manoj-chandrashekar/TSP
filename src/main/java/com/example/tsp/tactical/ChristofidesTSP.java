@@ -1,5 +1,7 @@
-package com.example.tsp;
+package com.example.tsp.tactical;
 
+import com.example.tsp.model.City;
+import com.example.tsp.model.Edge;
 import org.jgrapht.Graph;
 import org.jgrapht.alg.matching.blossom.v5.KolmogorovMinimumWeightPerfectMatching;
 import org.jgrapht.graph.DefaultWeightedEdge;
@@ -9,7 +11,12 @@ import java.util.*;
 
 public class ChristofidesTSP {
 
+    public static double totalWeight = 0.0;
+
     public static List<City> optimize(List<City> cities) {
+        if (cities.size() < 2) {
+            return new ArrayList<>();
+        }
         // Step 1: Create a minimum spanning tree (MST) for the given graph (cities).
         List<Edge> mstEdges = createMinimumSpanningTree(cities);
         System.out.println("MST: " + mstEdges.size());
@@ -50,7 +57,7 @@ public class ChristofidesTSP {
         List<Edge> mstEdges = new ArrayList<>();
         List<Edge> allEdges = new ArrayList<>();
         Map<City, City> parentMap = new HashMap<>();
-        double totalWeight = 0.0;
+        totalWeight = 0.0;
 
         // Create a list of all edges with their weights
         for (City city1 : cities) {
@@ -72,12 +79,12 @@ public class ChristofidesTSP {
 
         // Kruskal's algorithm
         for (Edge edge : allEdges) {
-            City sourceParent = findParent(edge.source, parentMap);
-            City targetParent = findParent(edge.target, parentMap);
+            City sourceParent = findParent(edge.getSource(), parentMap);
+            City targetParent = findParent(edge.getTarget(), parentMap);
 
             if (!sourceParent.equals(targetParent)) {
                 mstEdges.add(edge);
-                totalWeight += edge.weight;
+                totalWeight += edge.getWeight();
                 if (mstEdges.size() == cities.size() - 1) {
                     break;
                 }
@@ -108,8 +115,8 @@ public class ChristofidesTSP {
 
         // Calculate the degree of each vertex
         for (Edge edge : mstEdges) {
-            degreeMap.put(edge.source, degreeMap.get(edge.source) + 1);
-            degreeMap.put(edge.target, degreeMap.get(edge.target) + 1);
+            degreeMap.put(edge.getSource(), degreeMap.get(edge.getSource()) + 1);
+            degreeMap.put(edge.getTarget(), degreeMap.get(edge.getTarget()) + 1);
         }
 
         // Find the vertices with an odd degree
@@ -122,36 +129,6 @@ public class ChristofidesTSP {
 
         return oddDegreeVertices;
     }
-
-     //Greedy method
-    /*private static List<Edge> findMinimumWeightPerfectMatching(List<City> oddDegreeVertices) {
-        List<Edge> minimumWeightPerfectMatching = new ArrayList<>();
-        List<Edge> allEdges = new ArrayList<>();
-
-        // Create a list of all edges with their weights for odd degree vertices
-        for (City city1 : oddDegreeVertices) {
-            for (City city2 : oddDegreeVertices) {
-                if (!city1.equals(city2)) {
-                    double weight = city1.distanceTo(city2);
-                    allEdges.add(new Edge(city1, city2, weight));
-                }
-            }
-        }
-
-        // Sort the edges based on their weights
-        Collections.sort(allEdges);
-
-        // Greedy algorithm for finding minimum weight perfect matching
-        for (Edge edge : allEdges) {
-            if (oddDegreeVertices.contains(edge.source) && oddDegreeVertices.contains(edge.target)) {
-                minimumWeightPerfectMatching.add(edge);
-                oddDegreeVertices.remove(edge.source);
-                oddDegreeVertices.remove(edge.target);
-            }
-        }
-
-        return minimumWeightPerfectMatching;
-    }*/
 
     private static List<Edge> findMinimumWeightPerfectMatching(List<City> oddDegreeVertices) {
         Graph<City, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
@@ -201,13 +178,13 @@ public class ChristofidesTSP {
         Map<City, List<Edge>> adjList = new HashMap<>();
 
         for (Edge edge : combinedEdges) {
-            adjList.computeIfAbsent(edge.source, k -> new ArrayList<>()).add(edge);
-            adjList.computeIfAbsent(edge.target, k -> new ArrayList<>()).add(edge);
+            adjList.computeIfAbsent(edge.getSource(), k -> new ArrayList<>()).add(edge);
+            adjList.computeIfAbsent(edge.getTarget(), k -> new ArrayList<>()).add(edge);
         }
 
         List<City> circuit = new ArrayList<>();
         Deque<City> stack = new ArrayDeque<>();
-        City startCity = combinedEdges.get(0).source;
+        City startCity = combinedEdges.get(0).getSource();
         stack.push(startCity);
 
         while (!stack.isEmpty()) {
@@ -217,8 +194,8 @@ public class ChristofidesTSP {
                 stack.pop();
             } else {
                 Edge nextEdge = adjList.get(currentCity).remove(0);
-                stack.push(nextEdge.source == currentCity ? nextEdge.target : nextEdge.source);
-                adjList.get(nextEdge.source == currentCity ? nextEdge.target : nextEdge.source).remove(nextEdge);
+                stack.push(nextEdge.getSource() == currentCity ? nextEdge.getTarget() : nextEdge.getSource());
+                adjList.get(nextEdge.getSource() == currentCity ? nextEdge.getTarget() : nextEdge.getSource()).remove(nextEdge);
             }
         }
 

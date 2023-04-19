@@ -1,6 +1,6 @@
 package com.example.tsp.Utility;
 
-import com.example.tsp.City;
+import com.example.tsp.model.City;
 
 import java.io.File;
 import java.io.FileWriter;

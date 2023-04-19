@@ -13,4 +13,10 @@ module com.example.tsp {
 
     opens com.example.tsp to javafx.fxml,com.google.gson;
     exports com.example.tsp;
+    exports com.example.tsp.strategic;
+    opens com.example.tsp.strategic to com.google.gson, javafx.fxml;
+    exports com.example.tsp.tactical;
+    opens com.example.tsp.tactical to com.google.gson, javafx.fxml;
+    exports com.example.tsp.model;
+    opens com.example.tsp.model to com.google.gson, javafx.fxml;
 }

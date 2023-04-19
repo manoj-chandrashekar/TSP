@@ -1,4 +1,4 @@
-package com.example.tsp;
+package com.example.tsp.model;
 
 //import javafx.scene.paint.Color;
 //import javafx.scene.paint.Color;
