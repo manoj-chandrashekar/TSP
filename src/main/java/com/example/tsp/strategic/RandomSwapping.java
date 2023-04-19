@@ -9,6 +9,7 @@ import java.util.Random;
 
 public class RandomSwapping {
     public static List<City> optimize(List<City> tour, int maxIterations) {
+        if(tour.size() < 3) return tour;
         Random random = new Random();
         int n = tour.size();
         int iterations = 0;
