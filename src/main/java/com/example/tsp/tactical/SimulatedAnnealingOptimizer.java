@@ -1,4 +1,6 @@
-package com.example.tsp;
+package com.example.tsp.tactical;
+
+import com.example.tsp.model.City;
 
 import java.util.ArrayList;
 import java.util.Collections;

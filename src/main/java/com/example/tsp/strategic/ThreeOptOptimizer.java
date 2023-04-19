@@ -1,9 +1,11 @@
-package com.example.tsp;
+package com.example.tsp.strategic;
+
+import com.example.tsp.model.City;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class TSP3Opt {
+public class ThreeOptOptimizer {
     public static List<City> optimize(List<City> tour) {
         boolean improvement = true;
         while (improvement) {

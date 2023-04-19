@@ -1,6 +1,14 @@
 package com.example.tsp;
 
 import com.example.tsp.Utility.FileUtil;
+import com.example.tsp.model.City;
+import com.example.tsp.model.Edge;
+import com.example.tsp.strategic.RandomSwapping;
+import com.example.tsp.strategic.ThreeOptOptimizer;
+import com.example.tsp.strategic.TwoOptOptimizer;
+import com.example.tsp.tactical.AntColonyOptimization;
+import com.example.tsp.tactical.ChristofidesTSP;
+import com.example.tsp.tactical.SimulatedAnnealingOptimizer;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
@@ -13,7 +21,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Line;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -318,8 +325,10 @@ public class TspSolver extends Application {
         if (cities.size() < 2) {
             return;
         }
-        List<Edge> mst = minimumSpanningTree(cities);
+        /*List<Edge> mst = minimumSpanningTree(cities);
         System.out.println("MST: " + mst.size());
+        double mstCost = getMstCost(mst);
+        System.out.println("Minimum spanning tree cost: " + mstCost);
         List<City> oddVertices = oddDegreeVertices(cities, mst);
         System.out.println("Odd degree vertices: " + oddVertices.size());
         List<Edge> matching = minimumWeightPerfectMatching(oddVertices);
@@ -329,9 +338,9 @@ public class TspSolver extends Application {
         List<City> eulerianTour = findEulerianCircuit(multigraph);
         System.out.println("Eulerian circuit: " + eulerianTour.size());
         List<City> optimizedTour = convertEulerianToHamiltonian(eulerianTour);
-        System.out.println("Hamiltonian cycle: " + optimizedTour.size());
+        System.out.println("Hamiltonian cycle: " + optimizedTour.size());*/
 
-//        List<City> optimizedTour = ChristofidesTSP.optimize(cities);
+        List<City> optimizedTour = ChristofidesTSP.optimize(cities);
         christofideTour = new ArrayList<>(optimizedTour);
         displayData(canvas, optimizedTour, Color.AQUA);
         FileUtil.writeTourToCsv(optimizedTour, "christofide.csv");
@@ -374,6 +383,14 @@ public class TspSolver extends Application {
         cities.add(city);
     }
 
+    private double getMstCost(List<Edge> mst) {
+        double cost = 0;
+        for (Edge edge : mst) {
+            cost += edge.getWeight();
+        }
+        return cost;
+    }
+
     private List<Edge> minimumSpanningTree(List<City> cities) {
         List<Edge> mst = new ArrayList<>();
         Set<City> visitedCities = new HashSet<>();
@@ -395,14 +412,14 @@ public class TspSolver extends Application {
             Edge currentEdge = minHeap.poll();
 
             // If the target city has not been visited, add it to the MST
-            if (!visitedCities.contains(currentEdge.target)) {
+            if (!visitedCities.contains(currentEdge.getTarget())) {
                 mst.add(currentEdge);
-                visitedCities.add(currentEdge.target);
+                visitedCities.add(currentEdge.getTarget());
 
                 // Add all edges connected to the new city that are not yet in the MST to the minHeap
                 for (City city : cities) {
                     if (!visitedCities.contains(city)) {
-                        minHeap.offer(new Edge(currentEdge.target, city, currentEdge.target.distanceTo(city)));
+                        minHeap.offer(new Edge(currentEdge.getTarget(), city, currentEdge.getTarget().distanceTo(city)));
                     }
                 }
             }
@@ -421,8 +438,8 @@ public class TspSolver extends Application {
 
         // Count the degrees of each city in the MST
         for (Edge edge : mst) {
-            degreeMap.put(edge.source, degreeMap.get(edge.source) + 1);
-            degreeMap.put(edge.target, degreeMap.get(edge.target) + 1);
+            degreeMap.put(edge.getSource(), degreeMap.get(edge.getSource()) + 1);
+            degreeMap.put(edge.getTarget(), degreeMap.get(edge.getTarget()) + 1);
         }
 
         // Collect cities with odd degrees
@@ -476,7 +493,7 @@ public class TspSolver extends Application {
         Map<City, List<City>> adjacencyList = buildAdjacencyList(multigraph);
         List<City> tour = new ArrayList<>();
         Stack<City> stack = new Stack<>();
-        City startVertex = multigraph.get(0).source;
+        City startVertex = multigraph.get(0).getSource();
 
         stack.push(startVertex);
         while (!stack.isEmpty()) {
@@ -497,8 +514,8 @@ public class TspSolver extends Application {
     private Map<City, List<City>> buildAdjacencyList(List<Edge> edges) {
         Map<City, List<City>> adjacencyList = new HashMap<>();
         for (Edge edge : edges) {
-            adjacencyList.computeIfAbsent(edge.source, k -> new ArrayList<>()).add(edge.target);
-            adjacencyList.computeIfAbsent(edge.target, k -> new ArrayList<>()).add(edge.source);
+            adjacencyList.computeIfAbsent(edge.getSource(), k -> new ArrayList<>()).add(edge.getTarget());
+            adjacencyList.computeIfAbsent(edge.getTarget(), k -> new ArrayList<>()).add(edge.getSource());
         }
         return adjacencyList;
     }
@@ -523,7 +540,7 @@ public class TspSolver extends Application {
     }
 
     public void opt3(Canvas canvas, List<City> tour) {
-        List<City> optimizedTour = TSP3Opt.optimize(tour);
+        List<City> optimizedTour = ThreeOptOptimizer.optimize(tour);
         displayData(canvas, optimizedTour, Color.RED);
         FileUtil.writeTourToCsv(optimizedTour, "threeOpt.csv");
     }
@@ -614,151 +631,9 @@ public class TspSolver extends Application {
         double alpha = 1.0;
         double beta = 5.0;
         double evaporationRate = 0.7;
-        List<City> optimizedTour = antColonyOptimization(tour, numAnts, numIterations, alpha, beta, evaporationRate);
+        List<City> optimizedTour = AntColonyOptimization.optimize(tour, numAnts, numIterations, alpha, beta, evaporationRate);
         displayData(canvas, optimizedTour, Color.INDIGO);
         FileUtil.writeTourToCsv(optimizedTour, "antColony.csv");
-    }
-
-    private double calculateTourDistance(List<City> tour) {
-        double totalDistance = 0;
-        for (int i = 0; i < tour.size() - 1; i++) {
-            totalDistance += tour.get(i).distanceTo(tour.get(i + 1));
-        }
-        return totalDistance;
-    }
-
-    public List<City> antColonyOptimization(List<City> initialTour, int numAnts, int numIterations, double alpha, double beta, double evaporationRate) {
-        Map<Integer, Integer> cityIndices = new HashMap<>();
-        for (int i = 0; i < initialTour.size(); i++) {
-            cityIndices.put(initialTour.get(i).getId(), i);
-        }
-
-        double[][] pheromoneLevels = initializePheromoneLevels(initialTour.size());
-        double[][] distances = calculateDistances(initialTour);
-
-        List<City> bestTour = new ArrayList<>(initialTour);
-        double bestTourDistance = calculateTourDistance(initialTour);
-
-        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-
-        for (int iteration = 0; iteration < numIterations; iteration++) {
-            List<Future<List<City>>> antTourFutures = new ArrayList<>();
-
-            for (int i = 0; i < numAnts; i++) {
-                Callable<List<City>> callable = () -> constructAntTour(initialTour, distances, pheromoneLevels, alpha, beta, cityIndices);
-                Future<List<City>> future = executor.submit(callable);
-                antTourFutures.add(future);
-            }
-
-            List<List<City>> antTours = new ArrayList<>();
-            for (Future<List<City>> future : antTourFutures) {
-                try {
-                    List<City> antTour = future.get();
-                    antTours.add(antTour);
-                    double antTourDistance = calculateTourDistance(antTour);
-
-                    if (antTourDistance < bestTourDistance) {
-                        bestTour = new ArrayList<>(antTour);
-                        bestTourDistance = antTourDistance;
-                    }
-                } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            updatePheromoneLevels(pheromoneLevels, antTours, evaporationRate, cityIndices);
-        }
-
-        executor.shutdown();
-        return bestTour;
-    }
-
-    private double[][] initializePheromoneLevels(int numCities) {
-        double[][] pheromoneLevels = new double[numCities][numCities];
-        for (int i = 0; i < numCities; i++) {
-            for (int j = 0; j < numCities; j++) {
-                pheromoneLevels[i][j] = 1.0;
-            }
-        }
-        return pheromoneLevels;
-    }
-
-    private double[][] calculateDistances(List<City> cities) {
-        int numCities = cities.size();
-        double[][] distances = new double[numCities][numCities];
-        for (int i = 0; i < numCities; i++) {
-            for (int j = 0; j < numCities; j++) {
-                distances[i][j] = cities.get(i).distanceTo(cities.get(j));
-            }
-        }
-        return distances;
-    }
-
-    private List<City> constructAntTour(List<City> cities, double[][] distances, double[][] pheromoneLevels, double alpha, double beta, Map<Integer, Integer> cityIndices) {
-        List<City> tour = new ArrayList<>();
-        List<City> remainingCities = new ArrayList<>(cities);
-
-        City startCity = remainingCities.remove(0);
-        tour.add(startCity);
-        City currentCity = startCity;
-
-        Random random = new Random();
-        while (!remainingCities.isEmpty()) {
-            double totalProbability = 0;
-            for (City city : remainingCities) {
-                int i = cityIndices.get(currentCity.getId());
-                int j = cityIndices.get(city.getId());
-                totalProbability += Math.pow(pheromoneLevels[i][j], alpha) * Math.pow(1 / distances[i][j], beta);
-            }
-
-            double selectionValue = random.nextDouble() * totalProbability;
-            double accumulatedProbability = 0;
-            City nextCity = null;
-            Iterator<City> iterator = remainingCities.iterator();
-            while (iterator.hasNext() && nextCity == null) {
-                City city = iterator.next();
-                int i = cityIndices.get(currentCity.getId());
-                int j = cityIndices.get(city.getId());
-                accumulatedProbability += Math.pow(pheromoneLevels[i][j], alpha) * Math.pow(1 / distances[i][j], beta);
-                if (accumulatedProbability >= selectionValue) {
-                    nextCity = city;
-                    iterator.remove();
-                }
-            }
-
-            tour.add(nextCity);
-            currentCity = nextCity;
-        }
-
-        tour.add(startCity);
-        return tour;
-    }
-
-    private void updatePheromoneLevels(double[][] pheromoneLevels, List<List<City>> antTours, double evaporationRate, Map<Integer, Integer> cityIndices) {
-        int numCities = pheromoneLevels.length;
-
-        // Evaporate pheromones
-        for (int i = 0; i < numCities; i++) {
-            for (int j = 0; j < numCities; j++) {
-                pheromoneLevels[i][j] *= (1 - evaporationRate);
-            }
-        }
-
-        // Add new pheromones
-        for (List<City> tour : antTours) {
-            double tourDistance = calculateTourDistance(tour);
-
-            for (int i = 0; i < tour.size() - 1; i++) {
-                City city1 = tour.get(i);
-                City city2 = tour.get(i + 1);
-
-                int id1 = cityIndices.get(city1.getId());
-                int id2 = cityIndices.get(city2.getId());
-
-                pheromoneLevels[id1][id2] += 1 / tourDistance;
-                pheromoneLevels[id2][id1] += 1 / tourDistance;
-            }
-        }
     }
 
 }
