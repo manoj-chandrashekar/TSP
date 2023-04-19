@@ -35,6 +35,27 @@ public class PlottingUtil {
         return cities;
     }
 
+    public static List<City> readCitiesFromOldCSV(File file) {
+        List<City> cities = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            br.readLine(); // Skip the header row if it exists
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 3 && values[0] != null && values[4] != null && values[5] != null
+                && !values[0].isEmpty() && !values[4].isEmpty() && !values[5].isEmpty()) {
+                    String crimeIdLong = values[0];
+                    double longitude = Double.parseDouble(values[4]);
+                    double latitude = Double.parseDouble(values[5]);
+                    cities.add(new City(longitude, latitude, latitude, longitude, crimeIdLong));
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return cities;
+    }
+
     public static void plotCities(GraphicsContext citiesGc, GraphicsContext linesGc, Canvas citiesCanvas, Canvas linesCanvas, List<City> cities) {
         citiesGc.clearRect(0, 0, citiesCanvas.getWidth(), citiesCanvas.getHeight());
         linesGc.clearRect(0, 0, linesCanvas.getWidth(), linesCanvas.getHeight());
